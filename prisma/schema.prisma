@@ -1,0 +1,169 @@
+// EduOS — Prisma Schema
+// Multi-tenant SaaS — every table is scoped by institute_id
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────
+
+enum UserRole {
+  super_admin
+  admin
+  staff
+  student
+  parent
+}
+
+enum SubscriptionPlan {
+  free
+  basic
+  pro
+  enterprise
+}
+
+enum StudentStatus {
+  active
+  inactive
+  graduated
+}
+
+enum RelationType {
+  father
+  mother
+  guardian
+}
+
+// ─────────────────────────────────────────────────────────
+// INSTITUTES
+// Root tenant entity — every other table references this
+// ─────────────────────────────────────────────────────────
+
+model Institute {
+  id                String           @id @default(uuid())
+  name              String
+  logo              String?
+  subscription_plan SubscriptionPlan @default(free)
+  created_at        DateTime         @default(now())
+
+  // Relations
+  users    User[]
+  students Student[]
+  parents  Parent[]
+  staff    Staff[]
+
+  @@map("institutes")
+}
+
+// ─────────────────────────────────────────────────────────
+// USERS
+// Central user profile — synced with Supabase Auth
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid()) // matches Supabase auth.users.id
+  institute_id  String
+  role          UserRole
+  name          String
+  email         String    @unique
+  phone         String?
+  profile_image String?
+  created_at    DateTime  @default(now())
+
+  // Relations
+  institute Institute @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  student   Student?
+  parent    Parent?
+  staff     Staff?
+
+  @@index([institute_id])
+  @@index([email])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────
+// STUDENTS
+// ─────────────────────────────────────────────────────────
+
+model Student {
+  id              String        @id @default(uuid())
+  institute_id    String
+  user_id         String        @unique
+  admission_no    String
+  batch_id        String?
+  status          StudentStatus @default(active)
+
+  // Relations
+  institute      Institute       @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  student_parents StudentParent[]
+
+  @@unique([institute_id, admission_no])
+  @@index([institute_id])
+  @@index([user_id])
+  @@map("students")
+}
+
+// ─────────────────────────────────────────────────────────
+// PARENTS
+// ─────────────────────────────────────────────────────────
+
+model Parent {
+  id           String @id @default(uuid())
+  institute_id String
+  user_id      String @unique
+
+  // Relations
+  institute      Institute       @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  student_parents StudentParent[]
+
+  @@index([institute_id])
+  @@map("parents")
+}
+
+// ─────────────────────────────────────────────────────────
+// STUDENT_PARENTS
+// Junction table — one parent → many children
+//               — many guardians → one student
+// ─────────────────────────────────────────────────────────
+
+model StudentParent {
+  student_id    String
+  parent_id     String
+  relation_type RelationType
+
+  // Relations
+  student Student @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  parent  Parent  @relation(fields: [parent_id], references: [id], onDelete: Cascade)
+
+  @@id([student_id, parent_id])
+  @@index([parent_id])
+  @@map("student_parents")
+}
+
+// ─────────────────────────────────────────────────────────
+// STAFF
+// ─────────────────────────────────────────────────────────
+
+model Staff {
+  id           String  @id @default(uuid())
+  institute_id String
+  user_id      String  @unique
+  designation  String?
+  department   String?
+
+  // Relations
+  institute Institute @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([institute_id])
+  @@map("staff")
+}
