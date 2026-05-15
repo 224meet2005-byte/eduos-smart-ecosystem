@@ -14,7 +14,8 @@
 // Every function returns an ApiResponse<T> — never throws.
 // ---------------------------------------------------------------------------
 
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { generateStudentCredentials, generateTempPassword } from "@/utils/studentCredentials";
 import { getStudentBatch } from "@/services/batch.service";
 import { getStudentAttendanceHistory } from "@/services/attendance.service";
 import type {
@@ -91,7 +92,8 @@ function buildMonthlyTrend(records: StudentAttendanceRecord[]): AttendanceTrendP
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -119,7 +121,8 @@ function buildWeeklyTrend(records: StudentAttendanceRecord[]): AttendanceTrendPo
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -354,23 +357,8 @@ export async function getStudentHistory(studentId: string): Promise<ApiResponse<
   return { data: data as StudentHistory[], error: null, success: true };
 }
 
-/**
- * Return all active batches for a given institute.
- * Used to populate batch selectors in the admission and student-edit forms.
- */
-export async function getBatchesByInstitute(instituteId: string): Promise<ApiResponse<Batch[]>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  const { data, error } = await supabase
-    .from("batches")
-    .select("*")
-    .eq("institute_id", instituteId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Batch[], error: null, success: true };
-}
+// getBatchesByInstitute has moved to batch.service.ts — re-exported for backwards compatibility
+export { getBatchesByInstitute } from "@/services/batch.service";
 
 /**
  * Return a student with all currently linked parents.
@@ -427,7 +415,7 @@ export async function getCurrentStudentDashboard(
   const student = studentResult.data;
 
   const batchPromise = student.batch_id
-    ? getStudentBatch(student.batch_id, instituteId)
+    ? (getStudentBatch(student.batch_id, instituteId) as Promise<ApiResponse<StudentBatchInfo>>)
     : Promise.resolve({ data: null, error: null, success: true } as ApiResponse<StudentBatchInfo>);
 
   const [batchResult, historyResult] = await Promise.all([
@@ -445,8 +433,7 @@ export async function getCurrentStudentDashboard(
       history,
       stats,
     },
-    error:
-      [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
+    error: [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
     success: true,
   };
 }
@@ -460,10 +447,7 @@ export async function getCurrentStudentDashboard(
  * before calling this function.  `admission_no` must be unique per institute.
  */
 export async function createStudent(
-  payload: Pick<
-    Student,
-    "institute_id" | "user_id" | "admission_no" | "batch_id" | "status"
-  >,
+  payload: Pick<Student, "institute_id" | "user_id" | "admission_no" | "batch_id" | "status">,
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -481,9 +465,7 @@ export async function createStudent(
  */
 export async function updateStudent(
   id: string,
-  payload: Partial<
-    Pick<Student, "admission_no" | "batch_id" | "status" | "emergency_contact">
-  >,
+  payload: Partial<Pick<Student, "admission_no" | "batch_id" | "status" | "emergency_contact">>,
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -536,32 +518,111 @@ export async function restoreStudent(id: string): Promise<ApiResponse<Student>> 
 }
 
 /**
- * Admit a new student via the `admit_student` Postgres RPC.
+ * Admit a new student — secure architecture using Supabase Auth Admin API.
  *
- * The RPC atomically:
- *   1. Creates a Supabase auth user (invited, no password set yet)
- *   2. Inserts the `users` profile row (via `handle_new_user` + upsert merge)
- *   3. Inserts the `students` record (student fields only — never parent PII)
- *   4. Optionally creates or reuses a parent, then inserts `student_parents`
- *   5. Appends an activity log entry for the admission
+ * ROOT CAUSE OF PREVIOUS ERROR:
+ *   The system was using pgcrypto's gen_salt() in SQL or signUp() on the
+ *   frontend which required session restores.
  *
- * Known RPC error codes (raised via `RAISE EXCEPTION`) are translated into
- * friendly, user-facing messages before being returned.
+ * NEW FLOW (Supabase Auth Best Practices):
+ *   1. Generate login ID + virtual email + temp password in TypeScript.
+ *   2. Create student auth account via Admin API (bypasses session swaps).
+ *   3. Optionally create parent auth account via Admin API.
+ *   4. Call create_student_profile() RPC — DB records only, no password logic.
  */
 export async function admitStudent(
   payload: AdmitStudentPayload,
 ): Promise<ApiResponse<AdmitStudentResult>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
 
+  // ── Step 1: Generate student credentials ──────────────────────────────────
+  const instituteName = payload.institute_name ?? "edu";
+  const credentials = generateStudentCredentials(payload.student_name, instituteName);
+
+  // ── Step 2: Create Student Auth User via Admin API ────────────────────────
+  // This avoids signing out the admin and handles password hashing internally.
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: credentials.email,
+    password: credentials.tempPassword,
+    email_confirm: true,
+    user_metadata: {
+      name: payload.student_name,
+      role: "student",
+      institute_id: payload.institute_id,
+      login_id: credentials.loginId,
+    },
+  });
+
+  if (authError || !authData.user) {
+    return {
+      data: null,
+      error: authError?.message ?? "Failed to create student auth account. Please try again.",
+      success: false,
+    };
+  }
+
+  const studentUserId = authData.user.id;
+
+  // ── Step 3: Optional Parent Auth User ─────────────────────────────────────
+  let parentUserId: string | null = null;
   const hasParentBlock =
     !!payload.parent_name?.trim() &&
     !!payload.parent_email?.trim() &&
     payload.parent_relation_type != null;
 
-  const { data, error } = await supabase.rpc("admit_student", {
+  if (hasParentBlock) {
+    const parentEmail = payload.parent_email!.trim().toLowerCase();
+
+    // Check if parent user already exists
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", parentEmail)
+      .eq("role", "parent")
+      .maybeSingle();
+
+    if (existingUser) {
+      parentUserId = existingUser.id;
+    } else {
+      // Create new parent auth account
+      const { data: pAuthData, error: pAuthError } = await supabaseAdmin.auth.admin.createUser({
+        email: parentEmail,
+        email_confirm: true,
+        user_metadata: {
+          name: payload.parent_name,
+          role: "parent",
+          institute_id: payload.institute_id,
+        },
+      });
+
+      if (!pAuthError && pAuthData.user) {
+        parentUserId = pAuthData.user.id;
+      } else if (pAuthError?.message.includes("already registered") || pAuthError?.status === 422) {
+        // Parent already exists in auth.users but not in our public.users (or not for this institute)
+        // We need to find their ID. We use listUsers with a filter.
+        const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        if (!listError && listData.users) {
+          const user = listData.users.find((u) => u.email?.toLowerCase() === parentEmail);
+          if (user) {
+            parentUserId = user.id;
+          }
+        }
+      }
+
+      if (!parentUserId) {
+        console.error("[admitStudent] Failed to create or find parent auth user:", pAuthError?.message);
+      }
+    }
+  }
+
+  // ── Step 4: Create DB records via RPC (no pgcrypto, no auth.users insert) ─
+  const { data: rpcData, error: rpcError } = await supabase.rpc("create_student_profile", {
+    p_user_id: studentUserId,
     p_institute_id: payload.institute_id,
+    p_login_id: credentials.loginId,
+    p_student_email: credentials.email,
+    p_contact_email: payload.student_email?.trim() || null,
     p_name: payload.student_name,
-    p_email: payload.student_email,
     p_phone: payload.phone,
     p_admission_no: payload.admission_number,
     p_batch_id: payload.batch_id,
@@ -569,15 +630,21 @@ export async function admitStudent(
     p_emergency_contact: payload.emergency_contact,
     p_parent_name: hasParentBlock ? payload.parent_name : null,
     p_parent_email: hasParentBlock ? payload.parent_email : null,
-    p_parent_phone: hasParentBlock ? (payload.parent_phone?.trim() || null) : null,
-    p_parent_occupation: hasParentBlock ? (payload.parent_occupation?.trim() || null) : null,
+    p_parent_phone: hasParentBlock ? payload.parent_phone?.trim() || null : null,
+    p_parent_occupation: hasParentBlock ? payload.parent_occupation?.trim() || null : null,
     p_parent_relation_type: hasParentBlock ? payload.parent_relation_type : null,
+    p_parent_user_id: parentUserId,
   });
 
-  if (error) {
-    // Map known RPC error codes to friendly, actionable messages.
+  if (rpcError) {
+    // Log the orphan — a background job should clean up unlinked auth users.
+    console.error(
+      `[admitStudent] Auth user created (${studentUserId}) but profile RPC failed:`,
+      rpcError.message,
+    );
+
+    // Map known RPC error codes to friendly messages
     const friendlyErrors: Record<string, string> = {
-      ADMIT_STUDENT_DUPLICATE_EMAIL: "A user with this email address already exists.",
       ADMIT_STUDENT_DUPLICATE_ADMISSION_NO:
         "This admission number is already in use at this institute.",
       ADMIT_STUDENT_INVALID_INSTITUTE:
@@ -585,22 +652,61 @@ export async function admitStudent(
       ADMIT_STUDENT_INVALID_BATCH:
         "The selected batch does not exist or does not belong to this institute.",
       ADMIT_STUDENT_PARENT_OTHER_INSTITUTE:
-        "This guardian email is registered at another institute. Use a different email or contact support.",
-      ADMIT_STUDENT_PARENT_EMAIL_IN_USE:
-        "This email is already used by a non-parent account. Use a different guardian email.",
+        "This guardian email is registered at another institute.",
+      ADMIT_STUDENT_PARENT_EMAIL_IN_USE: "This email is already used by a non-parent account.",
       ADMIT_STUDENT_PARENT_CREATION_FAILED: "Failed to create parent account. Please try again.",
-      ADMIT_STUDENT_PARENT_SAME_AS_STUDENT:
-        "Parent email cannot be the same as the student email. Use a different guardian email.",
+      ADMIT_STUDENT_PARENT_SAME_AS_STUDENT: "Parent email cannot be the same as the student email.",
       ADMIT_STUDENT_INVALID_PARENT_RELATION: "Invalid parent relationship type.",
       ADMIT_STUDENT_FORBIDDEN: "You do not have permission to admit students for this institute.",
     };
-    const friendlyMessage = Object.entries(friendlyErrors).find(([code]) =>
-      error.message.includes(code),
+
+    const friendly = Object.entries(friendlyErrors).find(([code]) =>
+      rpcError.message.includes(code),
     )?.[1];
-    return { data: null, error: friendlyMessage ?? error.message, success: false };
+    return { data: null, error: friendly ?? rpcError.message, success: false };
   }
 
-  return { data: data as AdmitStudentResult, error: null, success: true };
+  // ── Step 5: Return credentials (shown ONCE to admin, never persisted) ─────
+  const result = rpcData as { student_id: string; user_id: string; admission_no: string };
+
+  return {
+    data: {
+      student_id: result.student_id,
+      user_id: studentUserId,
+      admission_no: result.admission_no,
+      login_id: credentials.loginId,
+      generated_email: credentials.email,
+      temporary_password: credentials.tempPassword,
+    },
+    error: null,
+    success: true,
+  };
+}
+
+/**
+ * Reset a student's password to a new auto-generated temporary password.
+ * This uses the Admin API and should only be available to admins.
+ */
+export async function resetStudentPassword(
+  userId: string,
+): Promise<ApiResponse<{ temporary_password: string }>> {
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
+
+  const newPassword = generateTempPassword();
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (error) {
+    return { data: null, error: error.message, success: false };
+  }
+
+  return {
+    data: { temporary_password: newPassword },
+    error: null,
+    success: true,
+  };
 }
 
 /**

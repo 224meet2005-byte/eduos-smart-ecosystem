@@ -80,7 +80,7 @@ export function RecordPaymentModal({
   const [receipt, setReceipt] = useState<RecordPaymentResult | null>(null);
 
   const remainingDue = Math.max(0, studentFee.final_amount - studentFee.paid_so_far);
-  const feeName = studentFee.fee_structure?.name ?? "Fee";
+  const feeName = studentFee.fee_structure?.fee_name ?? studentFee.fee_structure?.name ?? "Fee";
 
   const {
     register,

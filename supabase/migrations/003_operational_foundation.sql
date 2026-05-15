@@ -326,7 +326,7 @@ CREATE OR REPLACE FUNCTION public.admit_student(
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_caller_institute UUID;
@@ -511,7 +511,7 @@ CREATE OR REPLACE FUNCTION public.log_activity(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_institute_id UUID;

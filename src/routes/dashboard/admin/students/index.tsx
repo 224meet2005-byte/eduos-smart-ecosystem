@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Plus, AlertCircle, ChevronLeft, ChevronRight, X, RefreshCw, Loader2 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -22,7 +22,9 @@ import { useStudents } from "@/modules/students/hooks/useStudents";
 import { StudentTable } from "@/modules/students/components/StudentTable";
 import { StudentProfileSheet } from "@/modules/students/components/StudentProfileSheet";
 import { AdmissionForm } from "@/modules/students/components/AdmissionForm";
-import type { Student, StudentStatus } from "@/types";
+import { AssignFeeModal } from "@/modules/fees/components/AssignFeeModal";
+import { getFeeStructures } from "@/services/fee.service";
+import type { Student, StudentStatus, FeeStructure } from "@/types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -54,10 +56,33 @@ function StudentsPage() {
   // ── Local UI state ────────────────────────────────────────────────────────
   /** Currently viewed student — null means the profile sheet is closed. */
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  /** Controls the per-student fee assignment modal. */
+  const [isAssignFeeModalOpen, setIsAssignFeeModalOpen] = useState(false);
   /** Controls visibility of the Admit Student modal. */
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
   /** Tracks the raw SearchInput value (synced with hook's filters.search). */
   const [searchValue, setSearchValue] = useState("");
+  /** Fee structures available for assignment in the current institute. */
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
+
+  useEffect(() => {
+    if (!instituteId) return;
+
+    let cancelled = false;
+
+    async function loadFeeStructures() {
+      const result = await getFeeStructures(instituteId);
+      if (!cancelled && result.success && result.data) {
+        setFeeStructures(result.data);
+      }
+    }
+
+    loadFeeStructures();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [instituteId]);
 
   // ── Table callbacks ───────────────────────────────────────────────────────
 
@@ -103,6 +128,10 @@ function StudentsPage() {
 
     setSelectedStudent(null);
   }, [selectedStudent, archiveStudent, restoreStudent]);
+
+  const handleAssignFee = useCallback(() => {
+    setIsAssignFeeModalOpen(true);
+  }, []);
 
   // ── Admission success ─────────────────────────────────────────────────────
 
@@ -228,7 +257,23 @@ function StudentsPage() {
         isOpen={selectedStudent !== null}
         onClose={() => setSelectedStudent(null)}
         onArchive={handleSheetArchiveToggle}
+        onAssignFee={handleAssignFee}
       />
+
+      {selectedStudent && (
+        <AssignFeeModal
+          studentId={selectedStudent.id}
+          studentName={selectedStudent.user?.name ?? selectedStudent.admission_no}
+          instituteId={instituteId ?? ""}
+          feeStructures={feeStructures}
+          isOpen={isAssignFeeModalOpen}
+          onClose={() => setIsAssignFeeModalOpen(false)}
+          onSuccess={() => {
+            setIsAssignFeeModalOpen(false);
+            setSelectedStudent(null);
+          }}
+        />
+      )}
 
       {/* ── Admit Student Modal ───────────────────────────────────────── */}
       {isAdmitModalOpen && (

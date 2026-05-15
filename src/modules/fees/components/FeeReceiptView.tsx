@@ -125,7 +125,7 @@ export function FeeReceiptView({
   onClose,
 }: FeeReceiptViewProps) {
   const admissionNo = studentFee.student?.admission_no ?? "—";
-  const feeName = studentFee.fee_structure?.name ?? "Fee";
+  const feeName = studentFee.fee_structure?.fee_name ?? studentFee.fee_structure?.name ?? "Fee";
 
   return (
     <div className="w-full max-w-md mx-auto print:max-w-none print:mx-0">

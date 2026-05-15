@@ -330,7 +330,8 @@ function buildMonthlyTrend(records: StudentAttendanceRecord[]): AttendanceTrendP
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -364,7 +365,8 @@ function buildWeeklyTrend(records: StudentAttendanceRecord[]): AttendanceTrendPo
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -385,7 +387,9 @@ export async function getStudentAttendanceHistory(
 
     const { data, error } = await supabase
       .from("attendance_records")
-      .select("*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))")
+      .select(
+        "*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))",
+      )
       .eq("student_id", studentId)
       .in(
         "session_id",
@@ -399,7 +403,9 @@ export async function getStudentAttendanceHistory(
 
   const { data, error } = await supabase
     .from("attendance_records")
-    .select("*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))")
+    .select(
+      "*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))",
+    )
     .eq("student_id", studentId)
     .order("marked_at", { ascending: false });
 
@@ -412,7 +418,8 @@ export async function getStudentAttendanceStats(
   filters?: { dateFrom?: string; dateTo?: string },
 ): Promise<ApiResponse<StudentAttendanceStats>> {
   const historyResponse = await getStudentAttendanceHistory(studentId, filters);
-  if (!historyResponse.success) return historyResponse as ApiResponse<StudentAttendanceStats>;
+  if (!historyResponse.success)
+    return historyResponse as unknown as ApiResponse<StudentAttendanceStats>;
 
   const history = historyResponse.data ?? [];
   const totalSessions = history.length;

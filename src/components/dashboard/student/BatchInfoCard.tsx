@@ -29,7 +29,7 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
           </div>
           <Badge variant="outline" className="gap-1.5">
             <GraduationCap className="size-3.5" />
-            {batch ? batch.status : "Unassigned"}
+            {batch ? (batch.is_active ? "Active" : "Inactive") : "Unassigned"}
           </Badge>
         </div>
       </CardHeader>
@@ -43,7 +43,7 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
                   Batch name
                 </div>
                 <p className="mt-2 text-lg font-semibold text-foreground">{batch.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{batch.batch_code}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{batch.batch_code ?? ""}</p>
               </div>
               <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -51,16 +51,20 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
                   Strength
                 </div>
                 <p className="mt-2 text-lg font-semibold text-foreground">
-                  {batch.student_count ?? 0}/{batch.capacity}
+                  {batch.student_count ?? 0}
+                  {batch.capacity ? `/${batch.capacity}` : ""}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">Students enrolled</p>
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <InfoPill label="Course" value={batch.course_name} />
+              <InfoPill label="Course" value={batch.course_name ?? "—"} />
               <InfoPill label="Academic year" value={batch.academic_year} />
-              <InfoPill label="Start" value={formatDate(batch.start_date)} />
-              <InfoPill label="End" value={formatDate(batch.end_date)} />
+              <InfoPill
+                label="Start"
+                value={batch.start_date ? formatDate(batch.start_date) : "—"}
+              />
+              <InfoPill label="End" value={batch.end_date ? formatDate(batch.end_date) : "—"} />
             </div>
             <div className="rounded-2xl border border-dashed border-border/60 bg-background/80 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -68,7 +72,7 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
                 Timing
               </div>
               <p className="mt-2 text-sm text-foreground">
-                {batch.timing ?? "Not configured for this batch."}
+                {"Schedule details not configured for this batch."}
               </p>
             </div>
           </>
@@ -85,7 +89,9 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
 function InfoPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );

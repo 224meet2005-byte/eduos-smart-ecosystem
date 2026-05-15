@@ -1,25 +1,11 @@
 // ---------------------------------------------------------------------------
 // EduOS — Batch Service
-//
-// Batch management APIs used by:
-//   - Admin Batch Management page
-//   - Attendance batch selectors
-//   - Student assignment workflows
-//
+// Full CRUD for the `batches` table + student assignment operations.
 // Every function returns ApiResponse<T> — never throws.
 // ---------------------------------------------------------------------------
 
 import { supabase } from "@/lib/supabase";
-import type {
-  ApiResponse,
-  AttendanceBatchOption,
-  Batch,
-  BatchStatus,
-  CreateBatchPayload,
-  PaginatedResponse,
-  Student,
-  StudentBatchInfo,
-} from "@/types";
+import type { Batch, Student, CreateBatchPayload, UpdateBatchPayload, ApiResponse } from "@/types";
 
 const SUPABASE_NOT_CONFIGURED = {
   data: null,
@@ -27,346 +13,267 @@ const SUPABASE_NOT_CONFIGURED = {
   success: false,
 } as const;
 
-interface BatchListFilters {
-  search?: string;
-  status?: BatchStatus | "all";
-  page?: number;
-  pageSize?: number;
-}
+// ── Queries ───────────────────────────────────────────────────────────────────
 
-function toBatchCode(name: string): string {
-  const normalized = name
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return normalized.slice(0, 30) || "BATCH";
-}
-
-function mapBatchRow(row: Batch): Batch {
-  const fallbackStatus: BatchStatus = row.is_active ? "active" : "inactive";
-
-  return {
-    ...row,
-    batch_code: row.batch_code || toBatchCode(row.name),
-    course_name: row.course_name || "General",
-    start_date: row.start_date || row.created_at?.slice(0, 10),
-    end_date: row.end_date || row.created_at?.slice(0, 10),
-    capacity: Number(row.capacity ?? 0),
-    status: (row.status as BatchStatus | undefined) ?? fallbackStatus,
-    archived_at: row.archived_at ?? null,
-    student_count: row.student_count,
-  };
-}
-
-export async function createBatch(payload: CreateBatchPayload): Promise<ApiResponse<Batch>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  const batchCode = payload.batch_code?.trim().toUpperCase() || toBatchCode(payload.batch_name);
-
-  const { data, error } = await supabase
-    .from("batches")
-    .insert({
-      institute_id: payload.institute_id,
-      name: payload.batch_name.trim(),
-      batch_code: batchCode,
-      course_name: payload.course_name.trim(),
-      start_date: payload.start_date,
-      end_date: payload.end_date,
-      capacity: payload.capacity,
-      status: payload.status,
-      academic_year: payload.academic_year.trim(),
-      is_active: payload.status === "active",
-      archived_at: payload.status === "archived" ? new Date().toISOString() : null,
-    })
-    .select("*")
-    .single();
-
-  if (error) return { data: null, error: error.message, success: false };
-
-  return { data: mapBatchRow(data as Batch), error: null, success: true };
-}
-
-export async function updateBatch(
-  batchId: string,
-  payload: Partial<Omit<CreateBatchPayload, "institute_id">>,
-): Promise<ApiResponse<Batch>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  const updates: Record<string, unknown> = {};
-
-  if (payload.batch_name !== undefined) updates.name = payload.batch_name.trim();
-  if (payload.batch_code !== undefined) updates.batch_code = payload.batch_code.trim().toUpperCase();
-  if (payload.course_name !== undefined) updates.course_name = payload.course_name.trim();
-  if (payload.start_date !== undefined) updates.start_date = payload.start_date;
-  if (payload.end_date !== undefined) updates.end_date = payload.end_date;
-  if (payload.capacity !== undefined) updates.capacity = payload.capacity;
-  if (payload.academic_year !== undefined) updates.academic_year = payload.academic_year.trim();
-
-  if (payload.status !== undefined) {
-    updates.status = payload.status;
-    updates.is_active = payload.status === "active";
-    updates.archived_at = payload.status === "archived" ? new Date().toISOString() : null;
-  }
-
-  const { data, error } = await supabase
-    .from("batches")
-    .update(updates)
-    .eq("id", batchId)
-    .select("*")
-    .single();
-
-  if (error) return { data: null, error: error.message, success: false };
-
-  return { data: mapBatchRow(data as Batch), error: null, success: true };
-}
-
-export async function archiveBatch(batchId: string): Promise<ApiResponse<Batch>> {
-  return updateBatch(batchId, { status: "archived" });
-}
-
-export async function restoreBatch(batchId: string): Promise<ApiResponse<Batch>> {
-  return updateBatch(batchId, { status: "active" });
-}
-
-export async function softDeleteBatch(batchId: string): Promise<ApiResponse<Batch>> {
-  return updateBatch(batchId, { status: "inactive" });
-}
-
-export async function getStudentBatch(
-  batchId: string,
+/** Return all batches for an institute, with student count. */
+export async function getBatchesWithStudentCount(
   instituteId: string,
-): Promise<ApiResponse<StudentBatchInfo>> {
+): Promise<ApiResponse<(Batch & { student_count: number })[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   const { data, error } = await supabase
     .from("batches")
     .select("*")
-    .eq("id", batchId)
-    .eq("institute_id", instituteId)
-    .single();
-
-  if (error) return { data: null, error: error.message, success: false };
-
-  const { data: studentsData } = await supabase
-    .from("students")
-    .select("id")
-    .eq("institute_id", instituteId)
-    .eq("batch_id", batchId);
-
-  const batch = mapBatchRow(data as Batch) as StudentBatchInfo;
-
-  return {
-    data: {
-      ...batch,
-      timing: null,
-      student_count: studentsData?.length ?? batch.student_count ?? 0,
-    },
-    error: null,
-    success: true,
-  };
-}
-
-export async function getBatchesByInstitute(
-  instituteId: string,
-  filters: BatchListFilters = {},
-): Promise<ApiResponse<PaginatedResponse<Batch>>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  const page = Math.max(1, filters.page ?? 1);
-  const pageSize = Math.max(1, filters.pageSize ?? 10);
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  let query = supabase
-    .from("batches")
-    .select("*", { count: "exact" })
     .eq("institute_id", instituteId)
     .order("created_at", { ascending: false });
 
-  if (filters.status && filters.status !== "all") {
-    query = query.eq("status", filters.status);
-  }
-
-  if (filters.search) {
-    const search = filters.search.trim();
-    query = query.or(
-      `name.ilike.%${search}%,batch_code.ilike.%${search}%,course_name.ilike.%${search}%`,
-    );
-  }
-
-  const { data, error, count } = await query.range(from, to);
-
   if (error) return { data: null, error: error.message, success: false };
 
-  const batches = ((data ?? []) as Batch[]).map(mapBatchRow);
+  const { data: studentRows, error: studentError } = await supabase
+    .from("students")
+    .select("batch_id")
+    .eq("institute_id", instituteId);
 
-  if (batches.length > 0) {
-    const batchIds = batches.map((b) => b.id);
+  if (studentError) return { data: null, error: studentError.message, success: false };
 
-    const { data: studentsData } = await supabase
-      .from("students")
-      .select("id,batch_id")
-      .eq("institute_id", instituteId)
-      .in("batch_id", batchIds);
-
-    const counter = new Map<string, number>();
-
-    for (const row of studentsData ?? []) {
-      const batchId = (row as { batch_id: string | null }).batch_id;
-      if (!batchId) continue;
-      counter.set(batchId, (counter.get(batchId) ?? 0) + 1);
-    }
-
-    for (const batch of batches) {
-      batch.student_count = counter.get(batch.id) ?? 0;
-    }
+  const studentCounts = new Map<string, number>();
+  for (const row of studentRows ?? []) {
+    if (!row.batch_id) continue;
+    studentCounts.set(row.batch_id, (studentCounts.get(row.batch_id) ?? 0) + 1);
   }
 
-  const total = count ?? 0;
+  const items = (data ?? []).map((row) => {
+    return { ...row, student_count: studentCounts.get(row.id) ?? 0 };
+  });
 
-  return {
-    data: {
-      items: batches,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / pageSize)),
-      },
-    },
-    error: null,
-    success: true,
-  };
+  return { data: items, error: null, success: true };
 }
 
-export async function getActiveAttendanceBatches(
+/** Return active batches only (used by attendance page dropdown). */
+export async function getBatchesByInstitute(
   instituteId: string,
-): Promise<ApiResponse<AttendanceBatchOption[]>> {
+  includeInactive = false,
+): Promise<ApiResponse<Batch[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  let query = supabase
+    .from("batches")
+    .select("*")
+    .eq("institute_id", instituteId)
+    .order("created_at", { ascending: false });
+
+  if (!includeInactive) query = query.eq("is_active", true);
+
+  const { data, error } = await query;
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Batch[], error: null, success: true };
+}
+
+/** Return a single batch by id. */
+export async function getBatchById(id: string): Promise<ApiResponse<Batch>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase.from("batches").select("*").eq("id", id).single();
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Batch, error: null, success: true };
+}
+
+/** Return all students in a batch with joined user profile. */
+export async function getBatchStudents(
+  batchId: string,
+  instituteId: string,
+): Promise<ApiResponse<Student[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase
+    .from("students")
+    .select("*, user:users(id, name, email, phone, role, is_active, avatar_url)")
+    .eq("batch_id", batchId)
+    .eq("institute_id", instituteId)
+    .order("created_at", { ascending: false });
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Student[], error: null, success: true };
+}
+
+/** Return all students with no batch assigned yet (for the assign-students modal). */
+export async function getUnassignedStudents(instituteId: string): Promise<ApiResponse<Student[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase
+    .from("students")
+    .select("*, user:users(id, name, email, phone, role, is_active)")
+    .eq("institute_id", instituteId)
+    .is("batch_id", null)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Student[], error: null, success: true };
+}
+
+// ── Mutations ─────────────────────────────────────────────────────────────────
+
+/** Create a new batch. */
+export async function createBatch(payload: CreateBatchPayload): Promise<ApiResponse<Batch>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase.from("batches").insert(payload).select().single();
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Batch, error: null, success: true };
+}
+
+/** Update mutable batch fields. */
+export async function updateBatch(
+  id: string,
+  payload: UpdateBatchPayload,
+): Promise<ApiResponse<Batch>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   const { data, error } = await supabase
     .from("batches")
-    .select("id,name,course_name")
-    .eq("institute_id", instituteId)
-    .eq("status", "active")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
 
   if (error) return { data: null, error: error.message, success: false };
-
-  const options: AttendanceBatchOption[] = (data ?? []).map((row) => {
-    const item = row as { id: string; name: string; course_name: string | null };
-    const courseName = item.course_name ?? "General";
-    return {
-      id: item.id,
-      name: item.name,
-      course_name: courseName,
-      label: `${item.name} • ${courseName}`,
-    };
-  });
-
-  return { data: options, error: null, success: true };
+  return { data: data as Batch, error: null, success: true };
 }
 
-export async function assignStudentsToBatch(
-  instituteId: string,
-  batchId: string,
-  studentIds: string[],
-): Promise<ApiResponse<{ count: number }>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+/** Soft-delete a batch by setting is_active = false. */
+export async function archiveBatch(id: string): Promise<ApiResponse<Batch>> {
+  return updateBatch(id, { is_active: false });
+}
 
-  if (studentIds.length === 0) {
-    return { data: { count: 0 }, error: null, success: true };
-  }
+/** Restore a previously archived batch. */
+export async function restoreBatch(id: string): Promise<ApiResponse<Batch>> {
+  return updateBatch(id, { is_active: true });
+}
+
+/** Assign a single student to a batch. */
+export async function assignStudentToBatch(
+  studentId: string,
+  batchId: string,
+): Promise<ApiResponse<Student>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   const { data, error } = await supabase
     .from("students")
     .update({ batch_id: batchId })
-    .eq("institute_id", instituteId)
-    .in("id", studentIds)
-    .select("id");
+    .eq("id", studentId)
+    .select("*, user:users(id, name, email, phone, role, is_active)")
+    .single();
 
   if (error) return { data: null, error: error.message, success: false };
-
-  return { data: { count: (data ?? []).length }, error: null, success: true };
+  return { data: data as Student, error: null, success: true };
 }
 
-export async function removeStudentsFromBatch(
-  instituteId: string,
-  batchId: string,
-  studentIds: string[],
-): Promise<ApiResponse<{ count: number }>> {
+/** Remove a student from their current batch. */
+export async function removeStudentFromBatch(studentId: string): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  if (studentIds.length === 0) {
-    return { data: { count: 0 }, error: null, success: true };
-  }
 
   const { data, error } = await supabase
     .from("students")
     .update({ batch_id: null })
-    .eq("institute_id", instituteId)
-    .eq("batch_id", batchId)
+    .eq("id", studentId)
+    .select()
+    .single();
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as Student, error: null, success: true };
+}
+
+/** Assign multiple students to a batch in a single query. */
+export async function bulkAssignStudentsToBatch(
+  studentIds: string[],
+  batchId: string,
+): Promise<ApiResponse<{ count: number }>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+  if (studentIds.length === 0) return { data: { count: 0 }, error: null, success: true };
+
+  const { data, error } = await supabase
+    .from("students")
+    .update({ batch_id: batchId })
     .in("id", studentIds)
     .select("id");
 
   if (error) return { data: null, error: error.message, success: false };
-
   return { data: { count: (data ?? []).length }, error: null, success: true };
 }
 
-export async function getBatchStudents(
+// ── Backwards-compatibility aliases ──────────────────────────────────────────
+// These keep pre-existing components working after the batch service was unified.
+
+/** @deprecated Use getBatchesByInstitute */
+export async function getActiveAttendanceBatches(
   instituteId: string,
-  batchId: string,
-): Promise<ApiResponse<Student[]>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
-
-  const { data, error } = await supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("institute_id", instituteId)
-    .eq("batch_id", batchId)
-    .order("created_at", { ascending: false });
-
-  if (error) return { data: null, error: error.message, success: false };
-
-  return { data: (data ?? []) as Student[], error: null, success: true };
+): Promise<ApiResponse<Batch[]>> {
+  return getBatchesByInstitute(instituteId, false);
 }
 
+/** @deprecated Use bulkAssignStudentsToBatch */
+export async function assignStudentsToBatch(
+  _instituteId: string,
+  batchId: string,
+  studentIds: string[],
+): Promise<ApiResponse<{ count: number }>> {
+  return bulkAssignStudentsToBatch(studentIds, batchId);
+}
+
+/** @deprecated Use bulkAssignStudentsToBatch with empty batchId */
+export async function removeStudentsFromBatch(
+  _instituteId: string,
+  _batchId: string,
+  studentIds: string[],
+): Promise<ApiResponse<{ count: number }>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+  const { data, error } = await supabase
+    .from("students")
+    .update({ batch_id: null })
+    .in("id", studentIds)
+    .select("id");
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: { count: (data ?? []).length }, error: null, success: true };
+}
+
+/** @deprecated Use getUnassignedStudents */
 export async function getAssignableStudents(
   instituteId: string,
   search = "",
 ): Promise<ApiResponse<Student[]>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+  const result = await getUnassignedStudents(instituteId);
+  if (!result.success || !result.data) return result;
+  if (!search) return result;
+  const q = search.toLowerCase();
+  return {
+    ...result,
+    data: result.data.filter(
+      (s) =>
+        s.admission_no.toLowerCase().includes(q) || (s.user?.name ?? "").toLowerCase().includes(q),
+    ),
+  };
+}
 
-  let query = supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("institute_id", instituteId)
-    .order("created_at", { ascending: false })
-    .limit(300);
+/** Return a student's batch info. */
+export async function getStudentBatch(
+  batchId: string,
+  _instituteId: string,
+): Promise<ApiResponse<{ id: string; name: string; academic_year: string } | null>> {
+  if (!supabase) return { data: null, error: null, success: true };
 
-  if (search.trim()) {
-    const q = search.trim();
-    query = query.ilike("admission_no", `%${q}%`);
-  }
+  const { data, error } = await supabase
+    .from("batches")
+    .select("id, name, academic_year")
+    .eq("id", batchId)
+    .single();
 
-  const { data, error } = await query;
-
-  if (error) return { data: null, error: error.message, success: false };
-
-  let rows = (data ?? []) as Student[];
-  if (search.trim()) {
-    const q = search.trim().toLowerCase();
-    rows = rows.filter(
-      (student) =>
-        student.admission_no.toLowerCase().includes(q) ||
-        (student.user?.name ?? "").toLowerCase().includes(q) ||
-        (student.user?.email ?? "").toLowerCase().includes(q),
-    );
-  }
-
-  return { data: rows, error: null, success: true };
+  if (error) return { data: null, error: null, success: true }; // non-fatal
+  return {
+    data: data as { id: string; name: string; academic_year: string },
+    error: null,
+    success: true,
+  };
 }

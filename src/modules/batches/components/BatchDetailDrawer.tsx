@@ -35,6 +35,7 @@ export function BatchDetailDrawer({
       setIsLoading(true);
       setError(null);
 
+      if (!batch) return;
       const result = await getBatchStudents(instituteId, batch.id);
       if (cancelled) return;
 
@@ -111,15 +112,21 @@ export function BatchDetailDrawer({
           </div>
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="text-xs text-muted-foreground">Status</p>
-            <p className="mt-1 font-semibold capitalize text-foreground">{batch.status}</p>
+            <p className="mt-1 font-semibold capitalize text-foreground">
+              {batch.is_active ? "Active" : "Inactive"}
+            </p>
           </div>
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="text-xs text-muted-foreground">Start</p>
-            <p className="mt-1 font-semibold text-foreground">{formatDate(batch.start_date)}</p>
+            <p className="mt-1 font-semibold text-foreground">
+              {batch.start_date ? formatDate(batch.start_date) : "—"}
+            </p>
           </div>
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="text-xs text-muted-foreground">End</p>
-            <p className="mt-1 font-semibold text-foreground">{formatDate(batch.end_date)}</p>
+            <p className="mt-1 font-semibold text-foreground">
+              {batch.end_date ? formatDate(batch.end_date) : "—"}
+            </p>
           </div>
         </div>
 
@@ -150,7 +157,9 @@ export function BatchDetailDrawer({
             <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
               <Users className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">No students assigned</p>
-              <p className="mt-1 text-xs text-muted-foreground">Assign students to use this batch in attendance.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Assign students to use this batch in attendance.
+              </p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -163,7 +172,9 @@ export function BatchDetailDrawer({
                     {getInitials(student.user?.name ?? "?")}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{student.user?.name ?? "Unknown"}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {student.user?.name ?? "Unknown"}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{student.admission_no}</p>
                   </div>
                   <button

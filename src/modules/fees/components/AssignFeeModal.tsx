@@ -293,7 +293,7 @@ export function AssignFeeModal({
                   <option value="">— Select a fee structure —</option>
                   {feeStructures.map((fs) => (
                     <option key={fs.id} value={fs.id}>
-                      {fs.name} — {inr(fs.amount)} / {frequencyLabel(fs.frequency)}
+                      {fs.fee_name ?? fs.name} — {inr(fs.amount)} / {frequencyLabel(fs.frequency)}
                     </option>
                   ))}
                 </select>

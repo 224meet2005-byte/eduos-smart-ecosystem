@@ -3,7 +3,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, X } from "lucide-react";
 
-import { batchFormSchema, type BatchFormSchema } from "@/modules/batches/validations";
+import {
+  batchSchema as batchFormSchema,
+  type BatchSchema as BatchFormSchema,
+} from "@/modules/batches/validations";
 import type { Batch, CreateBatchPayload } from "@/types";
 
 interface BatchFormModalProps {
@@ -37,13 +40,12 @@ function defaultValues(batch?: Batch | null): BatchFormSchema {
   const start = batch?.start_date ?? new Date().toISOString().slice(0, 10);
 
   return {
-    batch_name: batch?.name ?? "",
+    name: batch?.name ?? "",
     batch_code: batch?.batch_code ?? "",
     course_name: batch?.course_name ?? "",
     start_date: start,
     end_date: batch?.end_date ?? start,
     capacity: batch?.capacity ?? 60,
-    status: batch?.status ?? "active",
     academic_year: batch?.academic_year ?? deriveAcademicYear(start),
   };
 }
@@ -88,13 +90,12 @@ export function BatchFormModal({
     setServerError(null);
 
     const payload = {
-      batch_name: values.batch_name.trim(),
-      batch_code: values.batch_code.trim().toUpperCase(),
-      course_name: values.course_name.trim(),
+      name: values.name.trim(),
+      batch_code: (values.batch_code ?? "").trim().toUpperCase() || undefined,
+      course_name: (values.course_name ?? "").trim() || undefined,
       start_date: values.start_date,
       end_date: values.end_date,
-      capacity: Number(values.capacity),
-      status: values.status,
+      capacity: values.capacity ? Number(values.capacity) : undefined,
       academic_year: values.academic_year.trim(),
     };
 
@@ -151,15 +152,16 @@ export function BatchFormModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2"
+        >
           <div>
             <label htmlFor="batch_name" className={LABEL_CLASS}>
               Batch Name
             </label>
-            <input id="batch_name" {...register("batch_name")} className={INPUT_CLASS} />
-            {errors.batch_name && (
-              <p className="mt-1 text-xs text-destructive">{errors.batch_name.message}</p>
-            )}
+            <input id="batch_name" {...register("name")} className={INPUT_CLASS} />
+            {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
           <div>
@@ -196,7 +198,12 @@ export function BatchFormModal({
             <label htmlFor="start_date" className={LABEL_CLASS}>
               Start Date
             </label>
-            <input id="start_date" type="date" {...register("start_date")} className={INPUT_CLASS} />
+            <input
+              id="start_date"
+              type="date"
+              {...register("start_date")}
+              className={INPUT_CLASS}
+            />
             {errors.start_date && (
               <p className="mt-1 text-xs text-destructive">{errors.start_date.message}</p>
             )}
@@ -216,22 +223,16 @@ export function BatchFormModal({
             <label htmlFor="capacity" className={LABEL_CLASS}>
               Capacity
             </label>
-            <input id="capacity" type="number" min={1} {...register("capacity")} className={INPUT_CLASS} />
+            <input
+              id="capacity"
+              type="number"
+              min={1}
+              {...register("capacity")}
+              className={INPUT_CLASS}
+            />
             {errors.capacity && (
               <p className="mt-1 text-xs text-destructive">{errors.capacity.message}</p>
             )}
-          </div>
-
-          <div>
-            <label htmlFor="status" className={LABEL_CLASS}>
-              Status
-            </label>
-            <select id="status" {...register("status")} className={INPUT_CLASS}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="archived">Archived</option>
-            </select>
-            {errors.status && <p className="mt-1 text-xs text-destructive">{errors.status.message}</p>}
           </div>
 
           <div className="col-span-1 mt-2 flex items-center justify-end gap-3 md:col-span-2">

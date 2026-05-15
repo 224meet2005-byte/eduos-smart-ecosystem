@@ -24,7 +24,7 @@ const phoneField = z
  * Zod schema for the "Admit Student" form.
  *
  * Sections:
- *  1. Personal info   — full name, email, phone (all required)
+ *  1. Personal info   — full name, phone (required); contact email optional
  *  2. Academic        — admission number (required), batch (optional text)
  *  3. Emergency contact — name, phone, relationship (all optional)
  *  4. Parent details  — name, email, phone, occupation, relationship (optional)
@@ -44,7 +44,12 @@ export const admissionSchema = z.object({
     .min(2, "Full name must be at least 2 characters")
     .max(100, "Full name must be 100 characters or fewer"),
 
-  email: z.string().email("Please enter a valid email address"),
+  /** Optional real contact email; login credentials are auto-generated on admission. */
+  contactEmail: z
+    .string()
+    .email("Please enter a valid email address")
+    .optional()
+    .or(z.literal("")),
 
   phone: phoneField,
 

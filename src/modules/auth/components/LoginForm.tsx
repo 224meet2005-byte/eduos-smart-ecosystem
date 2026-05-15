@@ -63,13 +63,13 @@ export function LoginForm() {
       {/* Email */}
       <div className="space-y-1.5">
         <label htmlFor="email" className="block text-sm font-medium text-foreground">
-          Email address
+          Email or student sign-in email
         </label>
         <input
           id="email"
           type="email"
           autoComplete="email"
-          placeholder="you@institute.edu"
+          placeholder="224sarvesh4831@eduos.student"
           {...register("email")}
           className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none ring-offset-background transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
         />

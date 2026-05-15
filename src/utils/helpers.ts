@@ -76,6 +76,21 @@ export function truncate(str: string, length: number): string {
   return `${str.slice(0, length)}...`;
 }
 
+/**
+ * Copy text to the system clipboard using the modern Clipboard API.
+ * Returns true on success, false on failure.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (!navigator.clipboard) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.error("Failed to copy text to clipboard:", err);
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Async / Timing
 // ---------------------------------------------------------------------------

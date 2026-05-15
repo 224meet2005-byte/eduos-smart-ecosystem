@@ -49,6 +49,7 @@ enum RelationType {
 model Institute {
   id                String           @id @default(uuid())
   name              String
+  institute_code    String           @unique
   logo              String?
   subscription_plan SubscriptionPlan @default(free)
   created_at        DateTime         @default(now())
@@ -97,6 +98,9 @@ model Student {
   institute_id    String
   user_id         String        @unique
   admission_no    String
+  login_id        String?       @unique
+  generated_email String?       @unique
+  contact_email   String?
   batch_id        String?
   status          StudentStatus @default(active)
 

@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Layers,
   BadgeCheck,
+  Trash2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +39,7 @@ import {
   getPendingDues,
   getRevenueStats,
   createFeeStructure,
+  deleteFeeStructure,
 } from "@/services/fee.service";
 import { FeeStatusBadge } from "@/modules/fees/components/FeeStatusBadge";
 import { RecordPaymentModal } from "@/modules/fees/components/RecordPaymentModal";
@@ -394,6 +396,7 @@ function FeesPage() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [duesError, setDuesError] = useState<string | null>(null);
   const [structuresError, setStructuresError] = useState<string | null>(null);
+  const [deletingStructureId, setDeletingStructureId] = useState<string | null>(null);
 
   // ── UI state ─────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>("pending");
@@ -463,6 +466,32 @@ function FeesPage() {
   const handleStructureCreated = useCallback((structure: FeeStructure) => {
     setFeeStructures((prev) => [structure, ...prev]);
   }, []);
+
+  const handleDeleteStructure = useCallback(
+    async (structure: FeeStructure) => {
+      if (!instituteId) return;
+
+      const confirmed = window.confirm(
+        `Delete ${structure.fee_name ?? structure.name}? This action cannot be undone.`,
+      );
+      if (!confirmed) return;
+
+      setDeletingStructureId(structure.id);
+      setStructuresError(null);
+
+      const result = await deleteFeeStructure(instituteId, structure.id);
+
+      if (!result.success) {
+        setStructuresError(result.error ?? "Failed to delete fee structure.");
+        setDeletingStructureId(null);
+        return;
+      }
+
+      setFeeStructures((prev) => prev.filter((item) => item.id !== structure.id));
+      setDeletingStructureId(null);
+    },
+    [instituteId],
+  );
 
   // ── Filtered pending dues ─────────────────────────────────────────────────
 
@@ -806,6 +835,9 @@ function FeesPage() {
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                           Status
                         </th>
+                        <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -813,7 +845,7 @@ function FeesPage() {
                         <tr key={fs.id} className="hover:bg-muted/30 transition-colors">
                           {/* Name */}
                           <td className="px-4 py-3">
-                            <p className="font-medium text-foreground">{fs.name}</p>
+                            <p className="font-medium text-foreground">{fs.fee_name ?? fs.name}</p>
                             {fs.description && (
                               <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                                 {fs.description}
@@ -855,6 +887,23 @@ function FeesPage() {
                               />
                               {fs.is_active ? "Active" : "Inactive"}
                             </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteStructure(fs)}
+                              disabled={deletingStructureId === fs.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 px-3 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingStructureId === fs.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              )}
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       ))}

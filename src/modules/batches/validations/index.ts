@@ -1,49 +1,31 @@
 import { z } from "zod";
 
-export const batchStatusSchema = z.enum(["active", "inactive", "archived"]);
-
-export const batchFormSchema = z
+export const batchSchema = z
   .object({
-    batch_name: z
+    name: z
       .string()
       .min(2, "Batch name must be at least 2 characters")
-      .max(100, "Batch name is too long"),
-    batch_code: z
-      .string()
-      .min(2, "Batch code must be at least 2 characters")
-      .max(30, "Batch code is too long")
-      .regex(/^[A-Za-z0-9_-]+$/, "Use only letters, numbers, dash, underscore"),
-    course_name: z
-      .string()
-      .min(2, "Course name must be at least 2 characters")
-      .max(100, "Course name is too long"),
-    start_date: z.string().min(1, "Start date is required"),
-    end_date: z.string().min(1, "End date is required"),
-    capacity: z.coerce
-      .number({ invalid_type_error: "Capacity must be a number" })
-      .int("Capacity must be a whole number")
-      .min(1, "Capacity must be at least 1")
-      .max(20000, "Capacity is too high"),
-    status: batchStatusSchema,
+      .max(100, "Batch name must be 100 characters or fewer"),
     academic_year: z
       .string()
-      .min(4, "Academic year is required")
-      .max(20, "Academic year is too long"),
+      .min(4, "Academic year required")
+      .max(20)
+      .regex(/^\d{4}(-\d{2,4})?$/, "Format: 2024 or 2024-25"),
+    description: z.string().max(300).optional(),
+    batch_code: z.string().max(50, "Batch code must be 50 characters or fewer").optional(),
+    course_name: z.string().max(100, "Course name must be 100 characters or fewer").optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    capacity: z
+      .number({ invalid_type_error: "Enter a valid number" })
+      .int("Capacity must be a whole number")
+      .positive("Capacity must be positive")
+      .max(1000, "Capacity cannot exceed 1000")
+      .optional(),
   })
-  .superRefine((value, ctx) => {
-    if (new Date(value.end_date) < new Date(value.start_date)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "End date must be on or after start date",
-        path: ["end_date"],
-      });
-    }
+  .refine((d) => !d.start_date || !d.end_date || d.end_date >= d.start_date, {
+    message: "End date must be on or after start date",
+    path: ["end_date"],
   });
 
-export type BatchFormSchema = z.infer<typeof batchFormSchema>;
-
-export const assignStudentsSchema = z.object({
-  student_ids: z.array(z.string().uuid()).min(1, "Select at least one student"),
-});
-
-export type AssignStudentsSchema = z.infer<typeof assignStudentsSchema>;
+export type BatchSchema = z.infer<typeof batchSchema>;

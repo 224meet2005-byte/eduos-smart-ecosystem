@@ -11,10 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentStudentDashboard } from "@/services/student.service";
+import { getStudentFees } from "@/services/billing.service";
 import { useAuthStore } from "@/store/authStore";
 import { useStudentDashboardStore } from "@/store/studentDashboardStore";
-import type { AttendanceStatus, StudentAttendanceRecord } from "@/types";
+import type { AttendanceStatus, StudentAttendanceRecord, StudentFee } from "@/types";
 import { AlertCircle, RefreshCw, Sparkles } from "lucide-react";
+import { FeeStatusBadge } from "@/modules/fees/components/FeeStatusBadge";
 
 export const Route = createFileRoute("/dashboard/student/")({
   head: () => ({ meta: [{ title: "Student Dashboard — EduOS" }] }),
@@ -33,6 +35,8 @@ function StudentDashboard() {
   const setDashboard = useStudentDashboardStore((state) => state.setDashboard);
 
   const [warning, setWarning] = useState<string | null>(null);
+  const [feeWarning, setFeeWarning] = useState<string | null>(null);
+  const [studentFees, setStudentFees] = useState<StudentFee[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "all">("all");
   const [sortDirection, setSortDirection] = useState<"newest" | "oldest">("newest");
@@ -55,6 +59,7 @@ function StudentDashboard() {
     async function loadDashboard() {
       setLoading(true);
       setWarning(null);
+      setFeeWarning(null);
 
       const response = await getCurrentStudentDashboard(user.id, user.institute_id);
       if (cancelled) return;
@@ -65,6 +70,16 @@ function StudentDashboard() {
         setError(null);
       } else {
         setError(response.error ?? "Failed to load the student dashboard.");
+      }
+
+      if (response.success && response.data?.student?.id) {
+        const feeResult = await getStudentFees(response.data.student.id);
+        if (!cancelled && feeResult.success && feeResult.data) {
+          setStudentFees(feeResult.data);
+        } else if (!cancelled) {
+          setFeeWarning(feeResult.error ?? "Failed to load fee data.");
+          setStudentFees([]);
+        }
       }
 
       setLoading(false);
@@ -129,12 +144,21 @@ function StudentDashboard() {
 
     setLoading(true);
     setWarning(null);
+    setFeeWarning(null);
     void getCurrentStudentDashboard(user.id, user.institute_id)
       .then((response) => {
         if (response.success && response.data) {
           setDashboard(user.id, response.data);
           setWarning(response.error);
           setError(null);
+          return getStudentFees(response.data.student.id).then((feeResult) => {
+            if (feeResult.success && feeResult.data) {
+              setStudentFees(feeResult.data);
+            } else {
+              setFeeWarning(feeResult.error ?? "Failed to load fee data.");
+              setStudentFees([]);
+            }
+          });
         } else {
           setError(response.error ?? "Failed to refresh the student dashboard.");
         }
@@ -144,6 +168,18 @@ function StudentDashboard() {
 
   const attendanceRate = activeDashboard?.stats.percentage ?? 0;
   const studentName = activeDashboard?.student.user?.name ?? user?.name ?? "Student";
+  const feeTotals = useMemo(() => {
+    const total = studentFees.reduce((sum, fee) => sum + fee.final_amount, 0);
+    const paid = studentFees.reduce((sum, fee) => sum + fee.paid_so_far, 0);
+    const pending = Math.max(0, total - paid);
+    const nextDueDate =
+      studentFees
+        .map((fee) => fee.next_due_date ?? fee.due_date)
+        .filter(Boolean)
+        .sort()[0] ?? null;
+
+    return { total, paid, pending, nextDueDate };
+  }, [studentFees]);
   const pageLabel = `${page} / ${totalPages}`;
 
   return (
@@ -199,6 +235,12 @@ function StudentDashboard() {
               <p>{error}</p>
             </div>
           ) : null}
+          {feeWarning ? (
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" />
+              <p>{feeWarning}</p>
+            </div>
+          ) : null}
           {lastUpdated ? (
             <p className="mt-4 text-xs uppercase tracking-[0.24em] text-muted-foreground">
               Last synced {new Date(lastUpdated).toLocaleString()}
@@ -222,6 +264,61 @@ function StudentDashboard() {
               />
               <BatchInfoCard batch={activeDashboard.batch} />
             </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
+              <FeeStatCard label="Total fees" value={`₹${feeTotals.total.toLocaleString("en-IN")}`} />
+              <FeeStatCard label="Paid" value={`₹${feeTotals.paid.toLocaleString("en-IN")}`} tone="success" />
+              <FeeStatCard label="Pending" value={`₹${feeTotals.pending.toLocaleString("en-IN")}`} tone="warning" />
+              <FeeStatCard label="Next due" value={feeTotals.nextDueDate ? new Date(feeTotals.nextDueDate).toLocaleDateString() : "—"} />
+            </div>
+
+            <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
+              <CardContent className="p-0">
+                <div className="border-b border-border px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">Fee & Billing</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {studentFees.length} active fee record{studentFees.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <Badge variant="outline">Parent linked automatically</Badge>
+                  </div>
+                </div>
+                <div className="divide-y divide-border">
+                  {studentFees.length === 0 ? (
+                    <div className="px-5 py-8 text-sm text-muted-foreground">
+                      No fee records found for this student yet.
+                    </div>
+                  ) : (
+                    studentFees.map((fee) => {
+                      const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+                      return (
+                        <div key={fee.id} className="px-5 py-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {fee.fee_structure?.fee_name ?? fee.fee_structure?.name ?? "Fee"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Bill {fee.bill_number ?? fee.id.slice(0, 8)} · Due {new Date(fee.next_due_date ?? fee.due_date).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <FeeStatusBadge status={fee.status} />
+                          </div>
+                          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
+                            <MiniFeeMetric label="Total" value={`₹${fee.final_amount.toLocaleString("en-IN")}`} />
+                            <MiniFeeMetric label="Paid" value={`₹${fee.paid_so_far.toLocaleString("en-IN")}`} />
+                            <MiniFeeMetric label="Pending" value={`₹${remaining.toLocaleString("en-IN")}`} />
+                            <MiniFeeMetric label="Parent" value={fee.parent?.user?.name ?? "Linked parent"} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             <AttendanceStatsCard stats={activeDashboard.stats} />
 
@@ -286,5 +383,39 @@ function LoadingCard({ className }: { className?: string }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FeeStatCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "success" | "warning";
+}) {
+  const toneClasses: Record<typeof tone, string> = {
+    default: "bg-muted/40 text-foreground",
+    success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    warning: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  };
+
+  return (
+    <Card className="border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+        <p className={`mt-2 text-lg font-semibold ${toneClasses[tone]}`}>{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniFeeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+    </div>
   );
 }

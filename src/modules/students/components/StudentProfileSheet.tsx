@@ -27,12 +27,18 @@ import {
   RotateCcw,
   Pencil,
   Loader2,
+  Key,
+  Copy,
+  Check,
+  RefreshCw,
+  ReceiptText,
 } from "lucide-react";
 
 import type { Student, StudentParent } from "@/types";
-import { getInitials, formatDate } from "@/utils/helpers";
+import { getInitials, formatDate, copyToClipboard } from "@/utils/helpers";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getParentsForStudent } from "@/services";
+import { getParentsForStudent, resetStudentPassword } from "@/services";
+import { toast } from "sonner";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +51,8 @@ interface StudentProfileSheetProps {
   onClose: () => void;
   /** Optional — when provided shows an Edit button in the footer. */
   onEdit?: () => void;
+  /** Optional — when provided shows an Assign Fee button in the footer. */
+  onAssignFee?: () => void;
   /** Optional — when provided shows Archive / Restore button in the footer. */
   onArchive?: () => void;
 }
@@ -95,10 +103,14 @@ export function StudentProfileSheet({
   isOpen,
   onClose,
   onEdit,
+  onAssignFee,
   onArchive,
 }: StudentProfileSheetProps) {
   const [parents, setParents] = useState<StudentParent[]>([]);
   const [parentsLoading, setParentsLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Fetch linked parents whenever the sheet opens for a new student.
   const fetchParents = useCallback(async (studentId: string) => {
@@ -115,10 +127,41 @@ export function StudentProfileSheet({
   useEffect(() => {
     if (isOpen && student?.id) {
       fetchParents(student.id);
+      setNewPassword(null);
     } else {
       setParents([]);
+      setNewPassword(null);
     }
   }, [isOpen, student?.id, fetchParents]);
+
+  async function handleResetPassword() {
+    if (!student?.user_id) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to reset this student's password? The current password will stop working immediately.",
+    );
+    if (!confirmed) return;
+
+    setIsResetting(true);
+    const result = await resetStudentPassword(student.user_id);
+    setIsResetting(false);
+
+    if (result.success && result.data) {
+      setNewPassword(result.data.temporary_password);
+      toast.success("Password reset successfully");
+    } else {
+      toast.error(result.error ?? "Failed to reset password");
+    }
+  }
+
+  async function handleCopyPassword() {
+    if (!newPassword) return;
+    if (await copyToClipboard(newPassword)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Password copied to clipboard");
+    }
+  }
 
   // Trap focus inside sheet and close on Escape key.
   useEffect(() => {
@@ -198,6 +241,63 @@ export function StudentProfileSheet({
             <InfoRow icon={<Calendar />} label="Joined" value={formatDate(student.created_at)} />
           </div>
 
+          {/* Account Credentials Section */}
+          <SectionLabel>Account Credentials</SectionLabel>
+          <div className="px-5 py-4 space-y-3">
+            <div className="rounded-lg border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase">Sign-in Email</span>
+                </div>
+              </div>
+              <p className="text-sm font-mono text-foreground break-all bg-background border border-border rounded px-2 py-1">
+                {student.generated_email || student.user?.email || "—"}
+              </p>
+            </div>
+
+            {newPassword ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-medium text-primary uppercase">New Temporary Password</span>
+                  </div>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="p-1 hover:bg-primary/10 rounded transition-colors"
+                    title="Copy password"
+                  >
+                    {copied ? (
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5 text-primary" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-sm font-mono font-bold text-foreground bg-background border border-primary/20 rounded px-2 py-1.5 flex items-center justify-between">
+                  {newPassword}
+                </p>
+                <p className="mt-2 text-[10px] text-primary/70 leading-tight">
+                  Share this password with the student. It will not be shown again once you close this panel.
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={handleResetPassword}
+                disabled={isResetting}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+              >
+                {isResetting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {isResetting ? "Resetting..." : "Reset Password & View"}
+              </button>
+            )}
+          </div>
+
           {/* Aadhaar removed from profile display */}
 
           {/* Emergency contact — only when present */}
@@ -249,6 +349,18 @@ export function StudentProfileSheet({
 
         {/* ── Footer actions ───────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 border-t border-border px-5 py-4 shrink-0">
+          {/* Assign Fee */}
+          {onAssignFee && (
+            <button
+              type="button"
+              onClick={onAssignFee}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <ReceiptText className="h-4 w-4" aria-hidden="true" />
+              Assign Fee
+            </button>
+          )}
+
           {/* Archive / Restore */}
           {onArchive && (
             <button
@@ -279,7 +391,7 @@ export function StudentProfileSheet({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <Pencil className="h-4 w-4" aria-hidden="true" />
               Edit

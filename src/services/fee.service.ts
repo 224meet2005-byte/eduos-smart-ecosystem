@@ -22,6 +22,10 @@ import type {
   FeeStatus,
   RecordPaymentResult,
   RevenueStats,
+  InstituteRevenueAnalytics,
+  ParentFeeSummary,
+  FeeReceipt,
+  FeeInstallment,
   ApiResponse,
 } from "@/types";
 
@@ -60,23 +64,81 @@ export async function getFeeStructures(instituteId: string): Promise<ApiResponse
  */
 export async function createFeeStructure(payload: {
   institute_id: string;
-  name: string;
+  name?: string;
+  fee_name?: string;
+  fee_code?: string;
+  fee_type?: string;
   amount: number;
-  frequency: string;
+  frequency?: string;
+  recurring_type?: string;
   academic_year: string;
+  due_date?: string;
+  installment_allowed?: boolean;
+  late_fee?: number;
   description?: string;
   category_id?: string;
+  batch_id?: string | null;
+  course_id?: string | null;
+  installment_count?: number;
 }): Promise<ApiResponse<FeeStructure>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
+  const feeName = payload.fee_name ?? payload.name ?? "Untitled Fee";
+
   const { data, error } = await supabase
     .from("fee_structures")
-    .insert(payload)
+    .insert({
+      ...payload,
+      name: feeName,
+      fee_name: feeName,
+      fee_code: payload.fee_code ?? feeName.toUpperCase().replace(/\s+/g, "_"),
+      fee_type: payload.fee_type ?? "custom",
+      recurring_type: payload.recurring_type ?? payload.frequency ?? "one_time",
+      installment_allowed: payload.installment_allowed ?? false,
+      late_fee: payload.late_fee ?? 0,
+      batch_id: payload.batch_id ?? null,
+      course_id: payload.course_id ?? null,
+      installment_count: payload.installment_count ?? 1,
+    })
     .select("*, category:fee_categories(*)")
     .single();
 
   if (error) return { data: null, error: error.message, success: false };
   return { data: data as FeeStructure, error: null, success: true };
+}
+
+/**
+ * Delete a fee structure if it has not been assigned to any students yet.
+ */
+export async function deleteFeeStructure(
+  instituteId: string,
+  feeStructureId: string,
+): Promise<ApiResponse<null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { count, error: countError } = await supabase
+    .from("student_fees")
+    .select("id", { count: "exact", head: true })
+    .eq("institute_id", instituteId)
+    .eq("fee_structure_id", feeStructureId);
+
+  if (countError) return { data: null, error: countError.message, success: false };
+  if ((count ?? 0) > 0) {
+    return {
+      data: null,
+      error: "This fee structure is already assigned to students and cannot be deleted.",
+      success: false,
+    };
+  }
+
+  const { error } = await supabase
+    .from("fee_structures")
+    .delete()
+    .eq("id", feeStructureId)
+    .eq("institute_id", instituteId);
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: null, error: null, success: true };
 }
 
 // ── Fee Categories ───────────────────────────────────────────────────────────
@@ -132,17 +194,129 @@ export async function assignFeeToStudent(payload: {
   discount_reason?: string;
   due_date: string;
   academic_year: string;
+  parent_id?: string | null;
+  scholarship_amount?: number;
+  concession_amount?: number;
+  waiver_amount?: number;
+  installment_count?: number;
+  fee_type?: string;
+  bill_number?: string;
 }): Promise<ApiResponse<StudentFee>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
+  const parentId = payload.parent_id ?? (await resolvePrimaryParentId(payload.student_id));
+
+  const scholarshipAmount = payload.scholarship_amount ?? 0;
+  const concessionAmount = payload.concession_amount ?? 0;
+  const waiverAmount = payload.waiver_amount ?? 0;
+  const computedDiscount =
+    payload.discount_amount + scholarshipAmount + concessionAmount + waiverAmount;
+  const finalAmount = Math.max(0, payload.original_amount - computedDiscount);
+  const billNumber =
+    payload.bill_number ?? `BILL-${payload.student_id.slice(0, 8).toUpperCase()}-${Date.now()}`;
+
   const { data, error } = await supabase
     .from("student_fees")
-    .insert(payload)
+    .insert({
+      student_id: payload.student_id,
+      institute_id: payload.institute_id,
+      fee_structure_id: payload.fee_structure_id,
+      parent_id: parentId,
+      assigned_by: payload.assigned_by,
+      original_amount: payload.original_amount,
+      discount_amount: computedDiscount,
+      discount_reason: payload.discount_reason ?? null,
+      scholarship_amount: scholarshipAmount,
+      concession_amount: concessionAmount,
+      waiver_amount: waiverAmount,
+      final_amount: finalAmount,
+      due_date: payload.due_date,
+      next_due_date: payload.due_date,
+      installment_count: payload.installment_count ?? 1,
+      fee_type: payload.fee_type ?? null,
+      bill_number: billNumber,
+      status: waiverAmount >= payload.original_amount ? "waived" : "pending",
+      academic_year: payload.academic_year,
+    })
     .select("*, fee_structure:fee_structures(*)")
     .single();
 
   if (error) return { data: null, error: error.message, success: false };
+
+  if (data && payload.installment_count && payload.installment_count > 1) {
+    await supabase.rpc("create_fee_installments", {
+      p_student_fee_id: data.id,
+      p_total_amount: finalAmount,
+      p_due_date: payload.due_date,
+      p_installment_count: payload.installment_count,
+    });
+  }
+
   return { data: data as StudentFee, error: null, success: true };
+}
+
+/**
+ * Assign a fee structure to multiple students or a whole batch.
+ * The function resolves linked parents automatically and returns the rows
+ * that were created.
+ */
+export async function assignFeesToStudents(payload: {
+  institute_id: string;
+  fee_structure_id: string;
+  assigned_by: string;
+  original_amount: number;
+  discount_amount?: number;
+  discount_reason?: string;
+  due_date: string;
+  academic_year: string;
+  student_ids?: string[];
+  batch_id?: string;
+  scholarship_amount?: number;
+  concession_amount?: number;
+  waiver_amount?: number;
+  installment_count?: number;
+  fee_type?: string;
+}): Promise<ApiResponse<StudentFee[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const studentIds =
+    Array.isArray(payload.student_ids) && payload.student_ids.length > 0
+      ? payload.student_ids
+      : payload.batch_id
+        ? await getStudentIdsByBatch(payload.institute_id, payload.batch_id)
+        : [];
+
+  if (studentIds.length === 0) {
+    return { data: [], error: null, success: true };
+  }
+
+  const created: StudentFee[] = [];
+  for (const studentId of studentIds) {
+    const result = await assignFeeToStudent({
+      student_id: studentId,
+      institute_id: payload.institute_id,
+      fee_structure_id: payload.fee_structure_id,
+      assigned_by: payload.assigned_by,
+      original_amount: payload.original_amount,
+      discount_amount: payload.discount_amount ?? 0,
+      discount_reason: payload.discount_reason,
+      due_date: payload.due_date,
+      academic_year: payload.academic_year,
+      scholarship_amount: payload.scholarship_amount,
+      concession_amount: payload.concession_amount,
+      waiver_amount: payload.waiver_amount,
+      installment_count: payload.installment_count,
+      fee_type: payload.fee_type,
+    });
+
+    if (!result.success || !result.data) {
+      return { data: null, error: result.error ?? "Failed to assign fees.", success: false };
+    }
+
+    created.push(result.data);
+  }
+
+  return { data: created, error: null, success: true };
 }
 
 /**
@@ -159,6 +333,7 @@ export async function getStudentFees(studentId: string): Promise<ApiResponse<Stu
       `
       *,
       fee_structure:fee_structures(*),
+      parent:parents(*, user:users(*)),
       payments:fee_payments(*)
     `,
     )
@@ -241,7 +416,23 @@ export async function recordPayment(payload: {
   });
 
   if (error) return { data: null, error: error.message, success: false };
-  return { data: data as RecordPaymentResult, error: null, success: true };
+  const normalized = data as unknown as {
+    payment_id: string;
+    receipt_number: string;
+    new_status: FeeStatus;
+    remaining_due?: number;
+    remaining_amount?: number;
+  };
+  return {
+    data: {
+      payment_id: normalized.payment_id,
+      receipt_number: normalized.receipt_number,
+      new_status: normalized.new_status,
+      remaining_amount: normalized.remaining_amount ?? normalized.remaining_due ?? 0,
+    },
+    error: null,
+    success: true,
+  };
 }
 
 /**
@@ -378,6 +569,7 @@ export async function getPendingDues(instituteId: string): Promise<ApiResponse<S
       `
       *,
       student:students(*, user:users(*)),
+      parent:parents(*, user:users(*)),
       fee_structure:fee_structures(*),
       payments:fee_payments(*)
     `,
@@ -388,4 +580,217 @@ export async function getPendingDues(instituteId: string): Promise<ApiResponse<S
 
   if (error) return { data: null, error: error.message, success: false };
   return { data: data as StudentFee[], error: null, success: true };
+}
+
+/**
+ * Return all fee installments for a student fee assignment.
+ */
+export async function getFeeInstallments(
+  studentFeeId: string,
+): Promise<ApiResponse<FeeInstallment[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase
+    .from("fee_installments")
+    .select("*")
+    .eq("student_fee_id", studentFeeId)
+    .order("installment_no", { ascending: true });
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as FeeInstallment[], error: null, success: true };
+}
+
+/**
+ * Build a parent-centric fee summary for the parent dashboard.
+ */
+export async function getParentFeeSummary(
+  parentId: string,
+): Promise<ApiResponse<ParentFeeSummary>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data: parent, error: parentError } = await supabase
+    .from("parents")
+    .select("*, user:users(*)")
+    .eq("id", parentId)
+    .single();
+
+  if (parentError) return { data: null, error: parentError.message, success: false };
+
+  const { data: studentFees, error: feesError } = await supabase
+    .from("student_fees")
+    .select(
+      `*, student:students(*, user:users(*)), fee_structure:fee_structures(*), payments:fee_payments(*), installments:fee_installments(*)`,
+    )
+    .eq("parent_id", parentId)
+    .order("created_at", { ascending: false });
+
+  if (feesError) return { data: null, error: feesError.message, success: false };
+
+  const grouped = new Map<string, ParentFeeSummary["children"][number]>();
+  let totalDue = 0;
+  let totalPaid = 0;
+
+  for (const fee of (studentFees ?? []) as StudentFee[]) {
+    if (!fee.student) continue;
+    const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+    totalDue += fee.final_amount;
+    totalPaid += fee.paid_so_far;
+
+    const existing = grouped.get(fee.student.id);
+    if (existing) {
+      existing.fee_items.push({
+        student_fee: fee,
+        total_due: fee.final_amount,
+        total_paid: fee.paid_so_far,
+        remaining_due: remaining,
+        next_due_date: fee.next_due_date ?? fee.due_date,
+      });
+      existing.total_due += fee.final_amount;
+      existing.total_paid += fee.paid_so_far;
+      existing.remaining_due += remaining;
+      continue;
+    }
+
+    grouped.set(fee.student.id, {
+      student: fee.student,
+      fee_items: [
+        {
+          student_fee: fee,
+          total_due: fee.final_amount,
+          total_paid: fee.paid_so_far,
+          remaining_due: remaining,
+          next_due_date: fee.next_due_date ?? fee.due_date,
+        },
+      ],
+      total_due: fee.final_amount,
+      total_paid: fee.paid_so_far,
+      remaining_due: remaining,
+    });
+  }
+
+  return {
+    data: {
+      parent: parent as ParentFeeSummary["parent"],
+      children: Array.from(grouped.values()),
+      total_due: totalDue,
+      total_paid: totalPaid,
+      remaining_due: Math.max(0, totalDue - totalPaid),
+    },
+    error: null,
+    success: true,
+  };
+}
+
+/**
+ * Aggregate revenue analytics for the institute billing dashboard.
+ */
+export async function getInstituteRevenueAnalytics(
+  instituteId: string,
+  academicYear: string,
+): Promise<ApiResponse<InstituteRevenueAnalytics>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data: fees, error: feeError } = await supabase
+    .from("student_fees")
+    .select("status, final_amount, paid_so_far, due_date")
+    .eq("institute_id", instituteId)
+    .eq("academic_year", academicYear);
+
+  if (feeError) return { data: null, error: feeError.message, success: false };
+
+  const { data: payments, error: paymentError } = await supabase
+    .from("fee_payments")
+    .select("amount, payment_date")
+    .eq("institute_id", instituteId);
+
+  if (paymentError) return { data: null, error: paymentError.message, success: false };
+
+  const statusDistribution: InstituteRevenueAnalytics["fee_status_distribution"] = {
+    paid: 0,
+    pending: 0,
+    partial: 0,
+    overdue: 0,
+    waived: 0,
+  };
+
+  let totalPending = 0;
+  let totalOverdue = 0;
+  let totalCollected = 0;
+  let currentMonthCollection = 0;
+
+  for (const fee of fees ?? []) {
+    statusDistribution[fee.status as FeeStatus] += 1;
+    const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+    if (fee.status === "pending" || fee.status === "partial") totalPending += remaining;
+    if (fee.status === "overdue") totalOverdue += remaining;
+  }
+
+  const monthBuckets = new Map<string, number>();
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  for (const payment of payments ?? []) {
+    totalCollected += payment.amount;
+    if (payment.payment_date.startsWith(currentMonth)) {
+      currentMonthCollection += payment.amount;
+    }
+    const month = payment.payment_date.slice(0, 7);
+    monthBuckets.set(month, (monthBuckets.get(month) ?? 0) + payment.amount);
+  }
+
+  const monthlyRevenue = Array.from(monthBuckets.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([month, amount]) => ({ month, amount }));
+
+  return {
+    data: {
+      total_collected: totalCollected,
+      total_pending: totalPending,
+      total_overdue: totalOverdue,
+      collection_this_month: currentMonthCollection,
+      fee_status_distribution: statusDistribution,
+      monthly_revenue: monthlyRevenue,
+    },
+    error: null,
+    success: true,
+  };
+}
+
+/**
+ * Return a printable receipt payload for a payment.
+ */
+export async function generateReceipt(paymentId: string): Promise<ApiResponse<FeeReceipt | null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase
+    .from("fee_receipts")
+    .select("*")
+    .eq("payment_id", paymentId)
+    .maybeSingle();
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: (data as FeeReceipt | null) ?? null, error: null, success: true };
+}
+
+async function resolvePrimaryParentId(studentId: string): Promise<string | null> {
+  const { data, error } = await supabase!
+    .from("student_parents")
+    .select("parent_id")
+    .eq("student_id", studentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.parent_id ?? null;
+}
+
+async function getStudentIdsByBatch(instituteId: string, batchId: string): Promise<string[]> {
+  const { data, error } = await supabase!
+    .from("students")
+    .select("id")
+    .eq("institute_id", instituteId)
+    .eq("batch_id", batchId);
+
+  if (error || !data) return [];
+  return data.map((row) => row.id);
 }

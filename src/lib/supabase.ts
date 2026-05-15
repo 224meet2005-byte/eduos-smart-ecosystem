@@ -37,12 +37,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl: string | undefined = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey: string | undefined = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey: string | undefined = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // ── Configuration flag ───────────────────────────────────────────────────────
 // Export this so AuthProvider, guards, and tests can check readiness without
 // importing the client itself.
 
 export const isSupabaseConfigured: boolean = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseAdminConfigured: boolean = Boolean(supabaseUrl && supabaseServiceKey);
 
 // ── Development warning ──────────────────────────────────────────────────────
 // Only emitted in dev mode and only in the browser (not during SSR stdout).
@@ -86,6 +88,23 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         persistSession: true,
         /** Detect OAuth / magic-link tokens from the URL on load */
         detectSessionInUrl: true,
+      },
+    })
+  : null;
+
+/**
+ * Admin client used for sensitive operations (e.g. creating users without
+ * requiring email confirmation, managing RBAC roles).
+ *
+ * This client uses the service_role key and bypasses Row Level Security (RLS).
+ * In TanStack Start, this should ONLY be imported and used within server
+ * functions (createServerFn) to avoid leaking the service_role key to the browser.
+ */
+export const supabaseAdmin: SupabaseClient | null = isSupabaseAdminConfigured
+  ? createClient(supabaseUrl!, supabaseServiceKey!, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
       },
     })
   : null;

@@ -19,7 +19,14 @@ import { Loader2, CheckCircle2, User, BookOpen, Shield, Phone, Users } from "luc
 
 import { admissionSchema, type AdmissionSchema } from "@/modules/students/validations";
 import { admitStudent } from "@/services";
-import type { AdmitStudentPayload, ParentAdmissionPayload, StudentAdmissionPayload } from "@/types";
+import { useAuthStore } from "@/store/authStore";
+import type {
+  AdmitStudentPayload,
+  AdmitStudentResult,
+  ParentAdmissionPayload,
+  StudentAdmissionPayload,
+} from "@/types";
+import { StudentCredentialsCard } from "@/modules/students/components/StudentCredentialsCard";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -27,7 +34,7 @@ interface AdmissionFormProps {
   /** Institute ID to attach the new student to. */
   instituteId: string;
   /** Called with the new student's ID and admission number on success. */
-  onSuccess: (result: { student_id: string; admission_no: string }) => void;
+  onSuccess: (result: AdmitStudentResult) => void;
   /** Called when the user explicitly cancels or clicks "Done" after success. */
   onCancel: () => void;
 }
@@ -65,11 +72,10 @@ function SectionHeader({ icon, title }: { icon: ReactNode; title: string }) {
  * reset and admit another student immediately.
  */
 export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFormProps) {
+  const { institute } = useAuthStore();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [successResult, setSuccessResult] = useState<{
-    student_id: string;
-    admission_no: string;
-  } | null>(null);
+  const [successResult, setSuccessResult] = useState<AdmitStudentResult | null>(null);
+  const [admittedStudentName, setAdmittedStudentName] = useState("");
 
   const {
     register,
@@ -80,7 +86,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
     resolver: zodResolver(admissionSchema),
     defaultValues: {
       fullName: "",
-      email: "",
+      contactEmail: "",
       phone: "",
       admissionNo: "",
       batchId: "",
@@ -109,7 +115,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
     const studentPayload: StudentAdmissionPayload = {
       institute_id: instituteId,
       student_name: values.fullName,
-      student_email: values.email,
+      student_email: values.contactEmail?.trim() || null,
       phone: values.phone,
       admission_number: values.admissionNo,
       batch_id: null,
@@ -128,13 +134,15 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       parent_email: values.parentEmail?.trim() || null,
       parent_phone: values.parentPhone?.trim() || null,
       parent_occupation: values.parentOccupation?.trim() || null,
-      parent_relation_type:
-        values.parentRelationType && values.parentRelationType !== ""
-          ? values.parentRelationType
-          : null,
+      parent_relation_type: values.parentRelationType ?? null,
     };
 
-    const payload: AdmitStudentPayload = { ...studentPayload, ...parentPayload };
+    const payload: AdmitStudentPayload = {
+      ...studentPayload,
+      ...parentPayload,
+      // Pass institute name so the credential generator can build a meaningful login ID prefix
+      institute_name: institute?.name ?? undefined,
+    };
 
     const result = await admitStudent(payload);
 
@@ -143,9 +151,9 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       return;
     }
 
-    const { student_id, admission_no } = result.data;
-    setSuccessResult({ student_id, admission_no });
-    onSuccess({ student_id, admission_no });
+    setAdmittedStudentName(values.fullName);
+    setSuccessResult(result.data);
+    onSuccess(result.data);
   }
 
   // ── Admit another handler ───────────────────────────────────────────────────
@@ -153,6 +161,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
   function handleAdmitAnother() {
     reset();
     setSuccessResult(null);
+    setAdmittedStudentName("");
     setServerError(null);
   }
 
@@ -172,15 +181,11 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
             Student admitted successfully!
           </h3>
           <p className="text-sm text-muted-foreground">
-            They will receive an email to set their password.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Admission No:{" "}
-            <span className="font-mono font-semibold text-foreground">
-              {successResult.admission_no}
-            </span>
+            Login credentials were generated. Share them securely with the student.
           </p>
         </div>
+
+        <StudentCredentialsCard studentName={admittedStudentName} credentials={successResult} />
 
         {/* Actions */}
         <div className="flex flex-col items-center gap-3 sm:flex-row">
@@ -244,27 +249,28 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
             )}
           </div>
 
-          {/* Email */}
+          {/* Contact email (optional) */}
           <div>
-            <label htmlFor="email" className={LABEL_CLASS}>
-              Email{" "}
-              <span className="text-destructive" aria-hidden="true">
-                *
-              </span>
+            <label htmlFor="contactEmail" className={LABEL_CLASS}>
+              Contact email{" "}
+              <span className="text-xs font-normal text-muted-foreground">(optional)</span>
             </label>
             <input
-              id="email"
+              id="contactEmail"
               type="email"
               autoComplete="email"
-              placeholder="student@example.com"
-              {...register("email")}
+              placeholder="Personal email for records only"
+              {...register("contactEmail")}
               className={INPUT_CLASS}
             />
-            {errors.email && (
+            {errors.contactEmail && (
               <p role="alert" className="mt-1 text-xs text-destructive">
-                {errors.email.message}
+                {errors.contactEmail.message}
               </p>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sign-in email and password are auto-generated at admission.
+            </p>
           </div>
 
           {/* Phone */}
@@ -402,7 +408,8 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       <div>
         <SectionHeader icon={<Users />} title="Parent / Guardian Details" />
         <p className="mb-4 text-xs text-muted-foreground -mt-1">
-          Optional — provide parent details to auto-create a parent account. If a parent with this email already exists, they will be linked instead.
+          Optional — provide parent details to auto-create a parent account. If a parent with this
+          email already exists, they will be linked instead.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Parent Name */}

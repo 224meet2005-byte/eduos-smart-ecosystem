@@ -81,8 +81,12 @@ export async function signIn(
 ): Promise<ApiResponse<{ user: User; institute: Institute }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
+  // Handle student login ID (e.g. "ocmsarvesh4831") by converting it to virtual email.
+  // If the input doesn't contain an '@', we assume it's a student login ID.
+  const authEmail = email.includes("@") ? email.trim() : `${email.trim()}@eduos.student`;
+
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email,
+    email: authEmail,
     password,
   });
 

@@ -19,7 +19,7 @@ export type SubscriptionPlan = "free" | "basic" | "pro" | "enterprise";
 
 export type StudentStatus = "active" | "inactive" | "graduated" | "suspended";
 
-export type BatchStatus = "active" | "inactive" | "archived";
+export type BatchStatus = "active" | "inactive";
 
 export type RelationType = "father" | "mother" | "guardian" | "sibling" | "other";
 
@@ -57,6 +57,8 @@ export interface User {
 export interface Institute {
   id: string;
   name: string;
+  /** Short code used as prefix for student login IDs (e.g. 224). */
+  institute_code?: string;
   logo: string | null;
   subscription_plan: SubscriptionPlan;
   is_active: boolean;
@@ -68,10 +70,17 @@ export interface Institute {
 export interface Student {
   id: string;
   institute_id: string;
+  /** Same as Supabase auth.users.id */
   user_id: string;
   admission_no: string;
   batch_id: string | null;
   status: StudentStatus;
+  /** Institute-scoped login handle (e.g. 224sarvesh4831). */
+  login_id?: string | null;
+  /** Virtual auth email (e.g. 224sarvesh4831@eduos.student). */
+  generated_email?: string | null;
+  /** Optional real contact email; not used for sign-in. */
+  contact_email?: string | null;
   emergency_contact?: EmergencyContact | null;
   created_at: string;
   updated_at: string;
@@ -176,54 +185,47 @@ export interface PasswordUpdateFormData {
 
 // ── Batches ──────────────────────────────────────────────────────────────────
 
-/** Row in the `batches` table (referenced by students). */
+/** Row in the `batches` table. */
 export interface Batch {
   id: string;
   institute_id: string;
   name: string;
-  batch_code: string;
-  course_name: string;
-  start_date: string;
-  end_date: string;
-  capacity: number;
-  status: BatchStatus;
   academic_year: string;
+  description: string | null;
+  batch_code: string | null;
+  course_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  capacity: number | null;
   is_active: boolean;
-  archived_at: string | null;
   created_at: string;
   updated_at: string;
+  // Computed
   student_count?: number;
-}
-
-export interface BatchStudent {
-  id: string;
-  batch_id: string;
-  student_id: string;
-  linked_at: string;
-  student?: Student;
-}
-
-export interface StudentBatchInfo extends Batch {
-  timing: string | null;
 }
 
 export interface CreateBatchPayload {
   institute_id: string;
-  batch_name: string;
-  batch_code: string;
-  course_name: string;
-  start_date: string;
-  end_date: string;
-  capacity: number;
-  status: BatchStatus;
+  name: string;
   academic_year: string;
+  description?: string;
+  batch_code?: string;
+  course_name?: string;
+  start_date?: string;
+  end_date?: string;
+  capacity?: number;
 }
 
-export interface AttendanceBatchOption {
-  id: string;
-  name: string;
-  course_name: string;
-  label: string;
+export interface UpdateBatchPayload {
+  name?: string;
+  academic_year?: string;
+  description?: string;
+  batch_code?: string;
+  course_name?: string;
+  start_date?: string;
+  end_date?: string;
+  capacity?: number;
+  is_active?: boolean;
 }
 
 // ── Extended / Derived Types ─────────────────────────────────────────────────
@@ -314,8 +316,11 @@ export interface StudentFilters {
  */
 export interface AdmitStudentPayload {
   institute_id: string;
+  /** Institute display name — used to build the login ID prefix (not stored). */
+  institute_name?: string;
   student_name: string;
-  student_email: string;
+  /** Optional contact email; auth uses auto-generated @eduos.student address. */
+  student_email: string | null;
   phone: string;
   admission_number: string;
   batch_id: string | null;
@@ -359,11 +364,17 @@ export type StudentLinkedForParent = Student & { relation_type: RelationType };
  * Shape returned by the `admit_student` RPC on success.
  * Callers can use these IDs to navigate to the new student's profile.
  */
-export interface AdmitStudentResult {
+/** One-time credentials returned by admit_student (password never persisted). */
+export interface StudentAdmissionCredentials {
   student_id: string;
   user_id: string;
   admission_no: string;
+  login_id: string;
+  generated_email: string;
+  temporary_password: string;
 }
+
+export interface AdmitStudentResult extends StudentAdmissionCredentials {}
 
 // ── Lifecycle Management ─────────────────────────────────────────────────────
 
@@ -521,6 +532,17 @@ export interface StudentAttendanceStats {
   weekly_trend: AttendanceTrendPoint[];
 }
 
+/** Full batch info as used in student-facing views. Extends Batch with optional computed fields. */
+export type StudentBatchInfo = Batch;
+
+/** Dropdown option shape for the attendance session batch selector. */
+export interface AttendanceBatchOption {
+  id: string;
+  name: string;
+  course_name: string | null;
+  label: string;
+}
+
 export interface StudentDashboardData {
   student: Student;
   batch: StudentBatchInfo | null;
@@ -551,6 +573,8 @@ export interface BulkAttendanceEntry {
 export type FeeFrequency = "one_time" | "monthly" | "quarterly" | "annual";
 export type FeeStatus = "pending" | "partial" | "paid" | "overdue" | "waived";
 export type PaymentMethod = "cash" | "upi" | "bank_transfer" | "cheque" | "card";
+export type FeeType = "tuition" | "admission" | "transport" | "exam" | "hostel" | "custom";
+export type RecurringType = "one_time" | "monthly" | "quarterly" | "annual";
 
 export interface FeeCategory {
   id: string;
@@ -566,9 +590,19 @@ export interface FeeStructure {
   institute_id: string;
   category_id: string | null;
   name: string;
+  fee_name?: string | null;
+  fee_code?: string | null;
+  fee_type?: FeeType | string | null;
   amount: number;
   frequency: FeeFrequency;
   academic_year: string;
+  due_date?: string | null;
+  installment_allowed?: boolean;
+  late_fee?: number;
+  recurring_type?: RecurringType | string;
+  batch_id?: string | null;
+  course_id?: string | null;
+  installment_count?: number;
   description: string | null;
   is_active: boolean;
   created_at: string;
@@ -581,21 +615,31 @@ export interface StudentFee {
   student_id: string;
   institute_id: string;
   fee_structure_id: string;
+  parent_id?: string | null;
   assigned_by: string;
   original_amount: number;
   discount_amount: number;
   discount_reason: string | null;
+  scholarship_amount?: number;
+  concession_amount?: number;
+  waiver_amount?: number;
   final_amount: number;
   /** Running sum of all confirmed payments — updated by `record_fee_payment` RPC. */
   paid_so_far: number;
   due_date: string;
+  next_due_date?: string | null;
+  bill_number?: string | null;
+  installment_count?: number;
+  fee_type?: string | null;
   status: FeeStatus;
   academic_year: string;
   created_at: string;
   updated_at: string;
   fee_structure?: FeeStructure;
   student?: Student;
+  parent?: Parent;
   payments?: FeePayment[];
+  installments?: FeeInstallment[];
 }
 
 export interface FeePayment {
@@ -603,6 +647,7 @@ export interface FeePayment {
   student_fee_id: string;
   student_id: string;
   institute_id: string;
+  parent_id?: string | null;
   /** User who collected / recorded the payment (FK to users.id). */
   collected_by: string;
   amount: number;
@@ -621,6 +666,7 @@ export interface FeeReceipt {
   id: string;
   payment_id: string;
   institute_id: string;
+  parent_id?: string | null;
   receipt_number: string;
   receipt_data: ReceiptData;
   generated_at: string;
@@ -635,6 +681,15 @@ export interface ReceiptData {
   payment_date: string;
   transaction_ref: string | null;
   student_fee_id: string;
+  student_id?: string;
+  institute_id?: string;
+  parent_id?: string | null;
+  student_name?: string;
+  parent_name?: string | null;
+  fee_name?: string;
+  fee_code?: string | null;
+  amount_paid?: number;
+  pending_balance?: number;
 }
 
 export interface RecordPaymentResult {
@@ -644,6 +699,50 @@ export interface RecordPaymentResult {
   new_status: FeeStatus;
   /** Balance remaining after this payment (INR). */
   remaining_amount: number;
+}
+
+export interface FeeInstallment {
+  id: string;
+  student_fee_id: string;
+  institute_id: string;
+  installment_no: number;
+  due_date: string;
+  amount: number;
+  paid_amount: number;
+  status: FeeStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeeSummaryItem {
+  student_fee: StudentFee;
+  total_due: number;
+  total_paid: number;
+  remaining_due: number;
+  next_due_date: string | null;
+}
+
+export interface ParentFeeSummary {
+  parent: Parent;
+  children: Array<{
+    student: Student;
+    fee_items: FeeSummaryItem[];
+    total_due: number;
+    total_paid: number;
+    remaining_due: number;
+  }>;
+  total_due: number;
+  total_paid: number;
+  remaining_due: number;
+}
+
+export interface InstituteRevenueAnalytics {
+  total_collected: number;
+  total_pending: number;
+  total_overdue: number;
+  collection_this_month: number;
+  fee_status_distribution: Record<FeeStatus, number>;
+  monthly_revenue: Array<{ month: string; amount: number }>;
 }
 
 export interface RevenueStats {
