@@ -54,9 +54,9 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "Students", url: "/dashboard/admin/students", icon: GraduationCap },
           { title: "Batches", url: "/dashboard/admin/batches", icon: BookOpen },
           { title: "Parents", url: "/dashboard/admin/parents", icon: Users },
-          { title: "Staff", url: "/dashboard/admin/staff", icon: Users, comingSoon: true },
+          { title: "Staff", url: "/dashboard/admin/staff", icon: Users },
           { title: "Courses", url: "/dashboard/admin/courses", icon: BookOpen },
-          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar, comingSoon: true },
+          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
         ],
       },
       {

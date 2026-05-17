@@ -75,7 +75,9 @@ function StudentDashboard() {
 
     loadDashboard().catch((loadError) => {
       if (cancelled) return;
-      setError(loadError instanceof Error ? loadError.message : "Failed to load the student dashboard.");
+      setError(
+        loadError instanceof Error ? loadError.message : "Failed to load the student dashboard.",
+      );
       setLoading(false);
     });
 
@@ -159,7 +161,10 @@ function StudentDashboard() {
 
           <div className="relative z-10 flex flex-wrap items-start justify-between gap-6">
             <div className="space-y-4 max-w-2xl">
-              <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit">
+              <Badge
+                variant="outline"
+                className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit"
+              >
                 <Sparkles className="size-3.5" />
                 Student Portal
               </Badge>
@@ -168,23 +173,26 @@ function StudentDashboard() {
                   Welcome back,{" "}
                   <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
                     {studentName.split(" ")[0]}
-                  </span>.
+                  </span>
+                  .
                 </h1>
                 <p className="mt-4 max-w-2xl text-base text-muted-foreground leading-relaxed">
-                  View your profile, batch assignment, attendance trend, and session history in one place.
+                  View your profile, batch assignment, attendance trend, and session history in one
+                  place.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {warning ? (
-                <Badge variant="outline" className="gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-300">
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                >
                   <AlertCircle className="size-3.5" />
                   Partial data loaded
                 </Badge>
               ) : null}
-              {isLoading ? (
-                <Badge variant="secondary">Refreshing</Badge>
-              ) : null}
+              {isLoading ? <Badge variant="secondary">Refreshing</Badge> : null}
               <Button variant="outline" onClick={refresh}>
                 <RefreshCw className="mr-2 size-4" />
                 Refresh
@@ -267,7 +275,9 @@ function StudentDashboard() {
               />
               <AttendanceCalendar records={attendanceRecords} />
             </div>
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Page {pageLabel}</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              Page {pageLabel}
+            </p>
           </div>
         ) : null}
       </div>
@@ -280,7 +290,9 @@ function QuickMetric({ label, value }: { label: string; value: string }) {
     <Card className="relative overflow-hidden border-border/50 bg-background/50 backdrop-blur-sm hover:shadow-md transition-shadow group">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       <CardContent className="p-5">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground/80">{label}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground/80">
+          {label}
+        </p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
       </CardContent>
     </Card>

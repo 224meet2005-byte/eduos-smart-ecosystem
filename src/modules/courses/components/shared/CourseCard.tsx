@@ -110,8 +110,7 @@ export function CourseCard({
   const completionPct = progress?.completion_pct ?? 0;
   const isComplete = completionPct >= 100;
 
-  const creatorName =
-    course.creator?.name ?? (isStudent ? undefined : "Unknown creator");
+  const creatorName = course.creator?.name ?? (isStudent ? undefined : "Unknown creator");
 
   return (
     <Card

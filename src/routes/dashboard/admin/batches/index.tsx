@@ -29,8 +29,10 @@ export const Route = createFileRoute("/dashboard/admin/batches/")({
 });
 
 function statusTone(status: BatchStatus): string {
-  if (status === "active") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400";
-  if (status === "archived") return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400";
+  if (status === "active")
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400";
+  if (status === "archived")
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400";
   return "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 }
 

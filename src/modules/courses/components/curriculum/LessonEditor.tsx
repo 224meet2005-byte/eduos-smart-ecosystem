@@ -56,13 +56,14 @@ import {
   getAssignmentByLessonId,
   createLessonMaterialFromUpload,
 } from "@/modules/courses/services/curriculum.service";
-import { uploadLessonVideo, getLessonMaterialSignedUrl, getVideoSignedUrl } from "@/modules/courses/services/upload.service";
+import {
+  uploadLessonVideo,
+  getLessonMaterialSignedUrl,
+  getVideoSignedUrl,
+} from "@/modules/courses/services/upload.service";
 import { QuizCreator } from "@/modules/courses/components/quiz/QuizCreator";
 import { LessonMediaPreview } from "@/modules/courses/components/curriculum/LessonMediaPreview";
-import {
-  isYouTubeUrl,
-  parseYouTubeVideoUrl,
-} from "@/modules/courses/utils/youtube";
+import { isYouTubeUrl, parseYouTubeVideoUrl } from "@/modules/courses/utils/youtube";
 import { isGoogleDriveUrl, parseGoogleDriveUrl } from "@/modules/courses/utils/gdrive";
 import {
   validatePdfFile,
@@ -352,7 +353,9 @@ export function LessonEditor({
   const [isPublished, setIsPublished] = useState(lesson.is_published ?? true);
   const [videoUrl, setVideoUrl] = useState(lesson.video_url ?? "");
   const [videoDurationSecs, setVideoDurationSecs] = useState(lesson.video_duration_secs ?? 0);
-  const [videoStoragePath, setVideoStoragePath] = useState<string | null>(lesson.video_storage_path ?? null);
+  const [videoStoragePath, setVideoStoragePath] = useState<string | null>(
+    lesson.video_storage_path ?? null,
+  );
 
   // Video upload state
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
@@ -528,7 +531,10 @@ export function LessonEditor({
 
     const updated = { ...lesson, ...updates, materials } as LmsLesson;
     setLesson(updated);
-    if (updates.video_url && (isYouTubeUrl(updates.video_url) || isGoogleDriveUrl(updates.video_url))) {
+    if (
+      updates.video_url &&
+      (isYouTubeUrl(updates.video_url) || isGoogleDriveUrl(updates.video_url))
+    ) {
       setVideoUrl(updates.video_url);
     }
     onUpdate(updated);
@@ -661,7 +667,9 @@ export function LessonEditor({
         onUpdate(updatedLesson);
 
         toast.success(
-          source === "pdf-primary" ? "PDF uploaded — click Save Lesson to confirm details" : "File attached",
+          source === "pdf-primary"
+            ? "PDF uploaded — click Save Lesson to confirm details"
+            : "File attached",
         );
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -771,7 +779,8 @@ export function LessonEditor({
                 <p className="text-xs text-destructive">{fieldErrors.videoUrl}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Paste a single YouTube video link (not a playlist). Supports youtube.com and youtu.be.
+                Paste a single YouTube video link (not a playlist). Supports youtube.com and
+                youtu.be.
               </p>
             </div>
 
@@ -867,7 +876,10 @@ export function LessonEditor({
                       videoUrl: parsed.ok ? undefined : parsed.error,
                     }));
                   } else if (v.trim()) {
-                    setFieldErrors((prev) => ({ ...prev, videoUrl: "Must be a valid Google Drive link" }));
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      videoUrl: "Must be a valid Google Drive link",
+                    }));
                   } else {
                     setFieldErrors((prev) => ({ ...prev, videoUrl: undefined }));
                   }
@@ -894,7 +906,10 @@ export function LessonEditor({
               }}
               placeholder="Write your lesson content here. Supports plain text and Markdown..."
               rows={12}
-              className={cn("font-mono text-sm resize-y", fieldErrors.content && "border-destructive")}
+              className={cn(
+                "font-mono text-sm resize-y",
+                fieldErrors.content && "border-destructive",
+              )}
             />
             {fieldErrors.content && (
               <p className="text-xs text-destructive">{fieldErrors.content}</p>

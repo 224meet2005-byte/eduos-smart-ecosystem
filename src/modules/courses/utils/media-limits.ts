@@ -12,8 +12,7 @@ export function formatMaxSize(bytes: number): string {
 }
 
 export function validatePdfFile(file: File): string | null {
-  const isPdf =
-    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   if (!isPdf) return "Only PDF files are allowed.";
   if (file.size > MAX_PDF_BYTES) {
     return `PDF must be smaller than ${formatMaxSize(MAX_PDF_BYTES)}.`;
@@ -23,9 +22,7 @@ export function validatePdfFile(file: File): string | null {
 }
 
 export function validateVideoFile(file: File): string | null {
-  const isVideo =
-    file.type.startsWith("video/") ||
-    /\.(mp4|webm|ogg|mov)$/i.test(file.name);
+  const isVideo = file.type.startsWith("video/") || /\.(mp4|webm|ogg|mov)$/i.test(file.name);
   if (!isVideo) return "Only video files (MP4, WebM, MOV) are allowed.";
   if (file.size > MAX_VIDEO_BYTES) {
     return `Video must be smaller than ${formatMaxSize(MAX_VIDEO_BYTES)}.`;

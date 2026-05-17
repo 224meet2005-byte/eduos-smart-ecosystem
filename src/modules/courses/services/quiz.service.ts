@@ -4,13 +4,24 @@
 // ---------------------------------------------------------------------------
 
 import { supabase } from "@/lib/supabase";
-import type { LmsQuiz, LmsQuizAttempt, ApiResponse } from "@/types";
+import type { ApiResponse, LmsQuiz, LmsQuizAttempt, LmsQuizChoice, LmsQuizQuestion } from "@/types";
 
 const NOT_CONFIGURED = {
   data: null,
   error: "Supabase is not configured.",
   success: false,
 } as const;
+
+function sortQuizQuestions(questions: LmsQuizQuestion[] | undefined) {
+  if (!questions) return;
+
+  questions.sort((left, right) => left.position - right.position);
+  questions.forEach((question) => {
+    question.choices?.sort(
+      (left: LmsQuizChoice, right: LmsQuizChoice) => left.position - right.position,
+    );
+  });
+}
 
 // ── Extended submit payload (adds attempt_id not in base SubmitQuizPayload) ───
 
@@ -27,9 +38,7 @@ export interface ExtendedSubmitQuizPayload {
 
 // ── getQuizWithQuestions ──────────────────────────────────────────────────────
 
-export async function getQuizWithQuestions(
-  quizId: string,
-): Promise<ApiResponse<LmsQuiz>> {
+export async function getQuizWithQuestions(quizId: string): Promise<ApiResponse<LmsQuiz>> {
   if (!supabase) return NOT_CONFIGURED;
 
   const { data, error } = await supabase
@@ -47,23 +56,14 @@ export async function getQuizWithQuestions(
   if (error) return { data: null, error: error.message, success: false };
 
   // Sort by position
-  if (data?.questions) {
-    (data.questions as any[]).sort((a: any, b: any) => a.position - b.position);
-    (data.questions as any[]).forEach((q: any) => {
-      if (q.choices) {
-        (q.choices as any[]).sort((a: any, b: any) => a.position - b.position);
-      }
-    });
-  }
+  sortQuizQuestions(data?.questions);
 
   return { data, error: null, success: true };
 }
 
 // ── getQuizByLesson ───────────────────────────────────────────────────────────
 
-export async function getQuizByLesson(
-  lessonId: string,
-): Promise<ApiResponse<LmsQuiz>> {
+export async function getQuizByLesson(lessonId: string): Promise<ApiResponse<LmsQuiz>> {
   if (!supabase) return NOT_CONFIGURED;
 
   const { data, error } = await supabase
@@ -81,14 +81,7 @@ export async function getQuizByLesson(
   if (error) return { data: null, error: error.message, success: false };
   if (!data) return { data: null, error: "No quiz found for this lesson", success: false };
 
-  if (data.questions) {
-    (data.questions as any[]).sort((a: any, b: any) => a.position - b.position);
-    (data.questions as any[]).forEach((q: any) => {
-      if (q.choices) {
-        (q.choices as any[]).sort((a: any, b: any) => a.position - b.position);
-      }
-    });
-  }
+  sortQuizQuestions(data.questions);
 
   return { data, error: null, success: true };
 }
@@ -185,8 +178,7 @@ export async function submitQuizAttempt(
       (question.question_type === "mcq" || question.question_type === "true_false")
     ) {
       const correctChoice = question.choices?.find((c) => c.is_correct);
-      isCorrect =
-        !!correctChoice && correctChoice.id === submitted.selected_choice_id;
+      isCorrect = !!correctChoice && correctChoice.id === submitted.selected_choice_id;
       pointsEarned = isCorrect ? question.points : 0;
     }
     // short_answer requires manual grading — points stay 0

@@ -153,7 +153,10 @@ function MyLearningPage() {
 
           <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
             <div className="space-y-4 max-w-xl">
-              <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary">
+              <Badge
+                variant="outline"
+                className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary"
+              >
                 <Sparkles className="size-3.5" />
                 My Learning
               </Badge>
@@ -164,7 +167,11 @@ function MyLearningPage() {
                 </span>
               </h1>
               <p className="text-base text-muted-foreground">
-                Continue your journey. You have <strong className="text-foreground font-medium">{stats.inProgress} course{stats.inProgress !== 1 ? "s" : ""}</strong> in progress.
+                Continue your journey. You have{" "}
+                <strong className="text-foreground font-medium">
+                  {stats.inProgress} course{stats.inProgress !== 1 ? "s" : ""}
+                </strong>{" "}
+                in progress.
               </p>
             </div>
 
@@ -377,14 +384,18 @@ function ContinueLearningCard({
       {/* Thumbnail */}
       <div className="relative h-40 bg-muted overflow-hidden">
         {course.thumbnail_url ? (
-          <img src={course.thumbnail_url} alt={course.title} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img
+            src={course.thumbnail_url}
+            alt={course.title}
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
         ) : (
           <div className="flex size-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
             <BookOpen className="size-10 text-primary/40" />
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-        
+
         {/* Play overlay on hover */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20">
           <div className="size-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/40 shadow-lg">
@@ -394,14 +405,23 @@ function ContinueLearningCard({
       </div>
 
       <CardContent className="p-4">
-        <p className="mb-2 line-clamp-2 text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{course.title}</p>
+        <p className="mb-2 line-clamp-2 text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+          {course.title}
+        </p>
         <div className="mb-4 space-y-1.5">
           <div className="flex justify-between text-xs text-muted-foreground font-medium">
             <span>{Math.round(pct)}% complete</span>
           </div>
-          <Progress value={pct} className="h-1.5 bg-muted [&>div]:bg-primary [&>div]:shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+          <Progress
+            value={pct}
+            className="h-1.5 bg-muted [&>div]:bg-primary [&>div]:shadow-[0_0_10px_rgba(var(--primary),0.5)]"
+          />
         </div>
-        <Button size="sm" onClick={onContinue} className="w-full gap-2 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors shadow-none border-none">
+        <Button
+          size="sm"
+          onClick={onContinue}
+          className="w-full gap-2 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors shadow-none border-none"
+        >
           <Play className="size-3.5 fill-current" />
           Resume Lesson
         </Button>
@@ -427,7 +447,11 @@ function CourseCard({
       {/* Thumbnail */}
       <div className="relative h-44 bg-muted overflow-hidden shrink-0">
         {course.thumbnail_url ? (
-          <img src={course.thumbnail_url} alt={course.title} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img
+            src={course.thumbnail_url}
+            alt={course.title}
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
         ) : (
           <div className="flex size-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
             <BookOpen className="size-12 text-primary/30" />
@@ -439,11 +463,14 @@ function CourseCard({
             <CheckCircle2 className="size-4 text-white" />
           </div>
         )}
-        
+
         {/* Category Badge */}
         {course.category_id && (
           <div className="absolute left-3 top-3">
-            <Badge variant="secondary" className="bg-background/80 backdrop-blur-md shadow-sm border-none font-medium">
+            <Badge
+              variant="secondary"
+              className="bg-background/80 backdrop-blur-md shadow-sm border-none font-medium"
+            >
               Course
             </Badge>
           </div>
@@ -460,16 +487,23 @@ function CourseCard({
             </Badge>
           )}
           {!isComplete && isStarted && (
-            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider text-amber-600 border-amber-500/30 bg-amber-500/5">
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase font-bold tracking-wider text-amber-600 border-amber-500/30 bg-amber-500/5"
+            >
               In Progress
             </Badge>
           )}
         </div>
 
         {/* Title & subtitle */}
-        <h3 className="line-clamp-2 text-base font-bold text-foreground group-hover:text-primary transition-colors">{course.title}</h3>
+        <h3 className="line-clamp-2 text-base font-bold text-foreground group-hover:text-primary transition-colors">
+          {course.title}
+        </h3>
         {course.subtitle && (
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">{course.subtitle}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">
+            {course.subtitle}
+          </p>
         )}
 
         <div className="flex-1" />
@@ -483,7 +517,13 @@ function CourseCard({
               {enrollment.progress?.total_lessons ?? course.total_lessons} lessons
             </span>
           </div>
-          <Progress value={pct} className={cn("h-1.5 bg-muted", isComplete ? "[&>div]:bg-emerald-500" : "[&>div]:bg-primary")} />
+          <Progress
+            value={pct}
+            className={cn(
+              "h-1.5 bg-muted",
+              isComplete ? "[&>div]:bg-emerald-500" : "[&>div]:bg-primary",
+            )}
+          />
         </div>
 
         {/* CTA */}
@@ -494,7 +534,7 @@ function CourseCard({
           className={cn(
             "w-full gap-2 rounded-xl shadow-sm transition-all duration-300",
             !isComplete && "bg-primary/90 hover:bg-primary hover:shadow-md",
-            isComplete && "border-border/60 hover:bg-muted/50"
+            isComplete && "border-border/60 hover:bg-muted/50",
           )}
         >
           {isComplete ? (

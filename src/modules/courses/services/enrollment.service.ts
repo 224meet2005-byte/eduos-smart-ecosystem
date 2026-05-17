@@ -96,7 +96,11 @@ export async function selfEnrollInCourse(
 
   const row = result.data?.find((e) => e.course_id === courseId && e.student_id === studentId);
   if (!row) {
-    return { data: null, error: "Enrollment could not be confirmed. Please refresh and try again.", success: false };
+    return {
+      data: null,
+      error: "Enrollment could not be confirmed. Please refresh and try again.",
+      success: false,
+    };
   }
 
   return { data: row, error: null, success: true };
@@ -142,9 +146,7 @@ export async function enrollBatch(
  * Soft-drops an enrollment by setting status='dropped' and recording the timestamp.
  * The enrollment record is retained for historical reporting.
  */
-export async function dropEnrollment(
-  enrollmentId: string,
-): Promise<ApiResponse<LmsEnrollment>> {
+export async function dropEnrollment(enrollmentId: string): Promise<ApiResponse<LmsEnrollment>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   const now = new Date().toISOString();
@@ -167,9 +169,7 @@ export async function dropEnrollment(
 /**
  * Fetches a single enrollment by its primary key.
  */
-export async function getEnrollmentById(
-  enrollmentId: string,
-): Promise<ApiResponse<LmsEnrollment>> {
+export async function getEnrollmentById(enrollmentId: string): Promise<ApiResponse<LmsEnrollment>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   const { data, error } = await supabase

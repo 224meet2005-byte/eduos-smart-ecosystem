@@ -4,10 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
-import {
-  isYouTubeUrl,
-  parseYouTubeVideoUrl,
-} from "@/modules/courses/utils/youtube";
+import { isYouTubeUrl, parseYouTubeVideoUrl } from "@/modules/courses/utils/youtube";
 import {
   resolveMaterialUrl,
   findPrimaryPdfMaterial,
@@ -32,11 +29,7 @@ export function LessonMediaPreview({
 }: LessonMediaPreviewProps) {
   if (lessonType === "video") {
     return (
-      <VideoPreview
-        videoUrl={videoUrl}
-        videoStoragePath={videoStoragePath}
-        className={className}
-      />
+      <VideoPreview videoUrl={videoUrl} videoStoragePath={videoStoragePath} className={className} />
     );
   }
 
@@ -104,7 +97,7 @@ function HostedVideoPreview({
       setLoading(true);
       void import("@/modules/courses/services/upload.service").then(({ getVideoSignedUrl }) =>
         getVideoSignedUrl(videoStoragePath).then((res) => {
-          setResolvedUrl(res.success ? res.data ?? null : null);
+          setResolvedUrl(res.success ? (res.data ?? null) : null);
           setLoading(false);
         }),
       );
@@ -211,9 +204,7 @@ function PdfPreview({
   }
 
   return (
-    <div
-      className={`overflow-hidden rounded-lg border border-border bg-muted ${className ?? ""}`}
-    >
+    <div className={`overflow-hidden rounded-lg border border-border bg-muted ${className ?? ""}`}>
       <iframe src={pdfUrl} title={pdf.title} className="aspect-[4/3] w-full min-h-[280px]" />
     </div>
   );

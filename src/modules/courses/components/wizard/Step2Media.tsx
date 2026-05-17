@@ -252,8 +252,10 @@ function ThumbnailSection({
           toast.error(result.error ?? "Upload failed");
           // Keep local preview even on error
         }
-      } catch (err: any) {
-        toast.error(err.message ?? "An unexpected error occurred during upload");
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "An unexpected error occurred during upload",
+        );
       } finally {
         setIsUploading(false);
       }
@@ -298,12 +300,7 @@ function ThumbnailSection({
                 <Image className="h-4 w-4 mr-1.5" />
                 Change
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                onClick={handleRemove}
-              >
+              <Button type="button" size="sm" variant="destructive" onClick={handleRemove}>
                 <X className="h-4 w-4 mr-1.5" />
                 Remove
               </Button>
@@ -412,8 +409,10 @@ function IntroVideoSection({
         } else {
           toast.error(result.error ?? "Video upload failed");
         }
-      } catch (err: any) {
-        toast.error(err.message ?? "An unexpected error occurred during upload");
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "An unexpected error occurred during upload",
+        );
       } finally {
         setIsUploading(false);
       }
@@ -442,7 +441,7 @@ function IntroVideoSection({
     return null;
   };
 
-  const currentVideoUrl = activeTab === "upload" ? uploadedVideoUrl : (urlSaved ? externalUrl : null);
+  const currentVideoUrl = activeTab === "upload" ? uploadedVideoUrl : urlSaved ? externalUrl : null;
   const embedUrl = currentVideoUrl ? getEmbedUrl(currentVideoUrl) : null;
 
   return (
@@ -665,7 +664,9 @@ export function Step2Media({
       <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
         <h4 className="text-xs font-semibold text-foreground">📸 Media best practices</h4>
         <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-          <li>Use a high-quality, relevant thumbnail — it significantly impacts click-through rate</li>
+          <li>
+            Use a high-quality, relevant thumbnail — it significantly impacts click-through rate
+          </li>
           <li>The intro video should focus on what students will achieve, not the syllabus</li>
           <li>Keep the intro video under 3 minutes for best retention</li>
           <li>Ensure the thumbnail text (if any) is readable at small sizes</li>

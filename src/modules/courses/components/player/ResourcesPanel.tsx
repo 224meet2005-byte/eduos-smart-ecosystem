@@ -84,9 +84,8 @@ export function ResourcesPanel({ lesson, materials, instituteId }: ResourcesPane
   }
 
   const resolveUrl = async (material: LmsLessonMaterial) => {
-    const { resolveMaterialUrl } = await import(
-      "@/modules/courses/services/lesson-content.service"
-    );
+    const { resolveMaterialUrl } =
+      await import("@/modules/courses/services/lesson-content.service");
     const res = await resolveMaterialUrl(material);
     if (!res.success || !res.data) {
       throw new Error(res.error ?? "Failed to generate download link");

@@ -29,21 +29,13 @@ import {
   startQuizAttempt,
   submitQuizAttempt,
 } from "@/modules/courses/services/quiz.service";
-import type {
-  LmsQuiz,
-  LmsQuizAttempt,
-  LmsQuizQuestion,
-  LmsEnrollment,
-} from "@/types";
+import type { LmsQuiz, LmsQuizAttempt, LmsQuizQuestion, LmsEnrollment } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type QuizPhase = "loading" | "pre-quiz" | "in-progress" | "results";
 
-type AnswerMap = Record<
-  string,
-  { selected_choice_id?: string; text_answer?: string }
->;
+type AnswerMap = Record<string, { selected_choice_id?: string; text_answer?: string }>;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,13 +142,7 @@ export function QuizPlayer({
 
     const attemptNo = attemptsUsed + 1;
 
-    const res = await startQuizAttempt(
-      quiz.id,
-      enrollment.id,
-      studentId,
-      instituteId,
-      attemptNo,
-    );
+    const res = await startQuizAttempt(quiz.id, enrollment.id, studentId, instituteId, attemptNo);
 
     if (!res.success || !res.data) {
       toast.error(res.error ?? "Failed to start quiz");
@@ -179,20 +165,14 @@ export function QuizPlayer({
   const handleSubmit = async (autoSubmit = false) => {
     if (!currentAttempt || submitting) return;
 
-    if (
-      !autoSubmit &&
-      Object.keys(answers).length < questions.length
-    ) {
+    if (!autoSubmit && Object.keys(answers).length < questions.length) {
       const unanswered = questions.length - Object.keys(answers).length;
-      toast.warning(
-        `You have ${unanswered} unanswered question(s). Submit anyway?`,
-        {
-          action: {
-            label: "Submit",
-            onClick: () => void handleSubmit(true),
-          },
+      toast.warning(`You have ${unanswered} unanswered question(s). Submit anyway?`, {
+        action: {
+          label: "Submit",
+          onClick: () => void handleSubmit(true),
         },
-      );
+      });
       return;
     }
 
@@ -287,10 +267,7 @@ export function QuizPlayer({
             label="Time limit"
             value={quiz.time_limit_mins ? `${quiz.time_limit_mins} min` : "Untimed"}
           />
-          <InfoCard
-            label="Attempts left"
-            value={`${attemptsLeft} / ${quiz.max_attempts}`}
-          />
+          <InfoCard label="Attempts left" value={`${attemptsLeft} / ${quiz.max_attempts}`} />
         </div>
 
         {/* Best score */}
@@ -443,11 +420,7 @@ export function QuizPlayer({
               <ChevronRight className="size-4" />
             </Button>
           ) : (
-            <Button
-              onClick={() => void handleSubmit()}
-              disabled={submitting}
-              className="gap-2"
-            >
+            <Button onClick={() => void handleSubmit()} disabled={submitting} className="gap-2">
               {submitting ? (
                 <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
@@ -489,7 +462,9 @@ export function QuizPlayer({
           <p
             className={cn(
               "mt-4 text-5xl font-bold tabular-nums",
-              passed ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+              passed
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-rose-600 dark:text-rose-400",
             )}
           >
             {resultAttempt.percentage.toFixed(1)}%
@@ -498,8 +473,8 @@ export function QuizPlayer({
             {passed ? "Congratulations, you passed!" : "Better luck next time"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {resultAttempt.score} / {resultAttempt.max_score} points &bull; Pass
-            mark: {quiz.passing_score}%
+            {resultAttempt.score} / {resultAttempt.max_score} points &bull; Pass mark:{" "}
+            {quiz.passing_score}%
           </p>
 
           {/* Passing score indicator */}
@@ -526,9 +501,7 @@ export function QuizPlayer({
                   key={question.id}
                   className={cn(
                     "border",
-                    isCorrect
-                      ? "border-emerald-500/30"
-                      : "border-rose-500/30",
+                    isCorrect ? "border-emerald-500/30" : "border-rose-500/30",
                   )}
                 >
                   <CardContent className="p-4">
@@ -580,9 +553,7 @@ export function QuizPlayer({
                         {/* Explanation */}
                         {!isCorrect && question.explanation && (
                           <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">
-                              Explanation:{" "}
-                            </span>
+                            <span className="font-medium text-foreground">Explanation: </span>
                             {question.explanation}
                           </div>
                         )}
@@ -615,10 +586,7 @@ export function QuizPlayer({
               Retake Quiz
             </Button>
           )}
-          <Button
-            className="flex-1 gap-2"
-            onClick={() => onComplete(resultAttempt)}
-          >
+          <Button className="flex-1 gap-2" onClick={() => onComplete(resultAttempt)}>
             <Award className="size-4" />
             Continue
           </Button>
@@ -641,9 +609,7 @@ interface QuestionCardProps {
 function QuestionCard({ question, answer, onAnswer }: QuestionCardProps) {
   return (
     <div className="p-6">
-      <p className="text-base font-semibold leading-relaxed text-foreground">
-        {question.question}
-      </p>
+      <p className="text-base font-semibold leading-relaxed text-foreground">{question.question}</p>
       <Badge variant="outline" className="mt-2 text-xs capitalize">
         {question.question_type === "true_false"
           ? "True / False"
@@ -654,8 +620,7 @@ function QuestionCard({ question, answer, onAnswer }: QuestionCardProps) {
 
       <div className="mt-4">
         {/* MCQ / True-False */}
-        {(question.question_type === "mcq" ||
-          question.question_type === "true_false") &&
+        {(question.question_type === "mcq" || question.question_type === "true_false") &&
           question.choices && (
             <RadioGroup
               value={answer?.selected_choice_id ?? ""}
@@ -668,16 +633,12 @@ function QuestionCard({ question, answer, onAnswer }: QuestionCardProps) {
                   className={cn(
                     "flex cursor-pointer items-center gap-3 rounded-lg border border-border p-3.5 transition-colors",
                     "hover:bg-accent/50",
-                    answer?.selected_choice_id === choice.id &&
-                      "border-primary/50 bg-primary/5",
+                    answer?.selected_choice_id === choice.id && "border-primary/50 bg-primary/5",
                   )}
                   onClick={() => onAnswer({ selected_choice_id: choice.id })}
                 >
                   <RadioGroupItem value={choice.id} id={choice.id} />
-                  <Label
-                    htmlFor={choice.id}
-                    className="flex-1 cursor-pointer text-sm font-normal"
-                  >
+                  <Label htmlFor={choice.id} className="flex-1 cursor-pointer text-sm font-normal">
                     {choice.choice_text}
                   </Label>
                 </div>
@@ -710,9 +671,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col items-center rounded-lg border border-border bg-muted/30 p-3 text-center">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-        {value}
-      </p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }

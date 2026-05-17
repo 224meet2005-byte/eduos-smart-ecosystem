@@ -66,7 +66,7 @@ export function useAuth(): UseAuthReturn {
    */
   async function logout(): Promise<void> {
     await signOut(); // best-effort — result intentionally ignored
-    store.logout();  // always clear the store
+    store.logout(); // always clear the store
   }
 
   return {

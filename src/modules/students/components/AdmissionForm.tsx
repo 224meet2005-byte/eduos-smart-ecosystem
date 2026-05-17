@@ -402,7 +402,8 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       <div>
         <SectionHeader icon={<Users />} title="Parent / Guardian Details" />
         <p className="mb-4 text-xs text-muted-foreground -mt-1">
-          Optional — provide parent details to auto-create a parent account. If a parent with this email already exists, they will be linked instead.
+          Optional — provide parent details to auto-create a parent account. If a parent with this
+          email already exists, they will be linked instead.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Parent Name */}

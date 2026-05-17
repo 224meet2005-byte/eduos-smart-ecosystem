@@ -109,7 +109,9 @@ export function AssignStudentsModal({
         </button>
 
         <h2 className="text-lg font-semibold text-foreground">Assign Students to {batch.name}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Select one or more students and assign them in bulk.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Select one or more students and assign them in bulk.
+        </p>
 
         <div className="mt-4">
           <SearchInput
@@ -133,7 +135,9 @@ export function AssignStudentsModal({
               Loading students...
             </div>
           ) : students.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">No students available</div>
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No students available
+            </div>
           ) : (
             <ul className="divide-y divide-border">
               {students.map((student) => {
@@ -150,12 +154,16 @@ export function AssignStudentsModal({
                       {getInitials(student.user?.name ?? "?")}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{student.user?.name ?? "Unknown"}</p>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {student.user?.name ?? "Unknown"}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {student.admission_no} • {student.user?.email ?? "No email"}
                       </p>
                     </div>
-                    <div className="text-xs text-muted-foreground">{student.batch_id ? `Current: ${student.batch_id}` : "Unassigned"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {student.batch_id ? `Current: ${student.batch_id}` : "Unassigned"}
+                    </div>
                   </li>
                 );
               })}

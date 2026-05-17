@@ -86,7 +86,11 @@ async function uploadWithProgress(
   if (!supabase) return NOT_CONFIGURED;
 
   if (!storagePath || storagePath.startsWith("/")) {
-    return { data: null, error: "Invalid storage path — institute ID may be missing.", success: false };
+    return {
+      data: null,
+      error: "Invalid storage path — institute ID may be missing.",
+      success: false,
+    };
   }
 
   const contentType = options.contentType || resolveFileMimeType(file);
@@ -95,17 +99,17 @@ async function uploadWithProgress(
   try {
     if (onProgress) {
       onProgress(5);
-      
+
       // Estimate upload time based on file size (assume 500KB/s upload speed)
       // For a 50MB file, this is 100 seconds.
       const estimatedSeconds = Math.max(file.size / (500 * 1024), 2);
-      
+
       // We want to reach 90% over the estimated time.
       // Progress to gain = 85 (from 5 to 90).
       const tickMs = 300;
       const totalTicks = (estimatedSeconds * 1000) / tickMs;
       const incrementPerTick = 85 / totalTicks;
-      
+
       let pct = 5;
       timer = setInterval(() => {
         pct = Math.min(pct + incrementPerTick, 92); // Cap at 92%

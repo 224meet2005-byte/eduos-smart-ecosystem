@@ -49,16 +49,22 @@ function StudentCoursesPage() {
 
           <div className="relative z-10 space-y-6">
             <div className="space-y-4 max-w-2xl">
-              <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit">
+              <Badge
+                variant="outline"
+                className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit"
+              >
                 <BookOpen className="size-3.5" />
                 Course Catalog
               </Badge>
               <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-5xl leading-tight">
-                Browse <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-600">Courses</span>
+                Browse{" "}
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-600">
+                  Courses
+                </span>
               </h1>
               <p className="max-w-2xl text-base text-muted-foreground leading-relaxed">
-                Enroll in published courses from your institute. After enrolling, courses appear in My
-                Learning and you can start lessons immediately.
+                Enroll in published courses from your institute. After enrolling, courses appear in
+                My Learning and you can start lessons immediately.
               </p>
             </div>
 

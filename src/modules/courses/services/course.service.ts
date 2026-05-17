@@ -312,7 +312,10 @@ export async function getStudentEnrollment(
 /** Published courses visible to students in their institute (RLS-scoped). */
 export async function listPublishedCoursesForStudent(
   instituteId: string,
-  filters: Pick<CourseListFilters, "search" | "page" | "pageSize" | "difficulty" | "category_id"> = {},
+  filters: Pick<
+    CourseListFilters,
+    "search" | "page" | "pageSize" | "difficulty" | "category_id"
+  > = {},
 ): Promise<ApiResponse<CourseListResult>> {
   return listCourses(instituteId, { ...filters, status: "published" });
 }

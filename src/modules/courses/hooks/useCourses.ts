@@ -170,10 +170,7 @@ export function useUpdateCourse() {
 
   return useMutation({
     mutationFn: async ({ courseId, updates }: { courseId: string; updates: Partial<LmsCourse> }) =>
-      unwrapApiResponse(
-        await updateCourse(courseId, updates),
-        "Failed to update course",
-      ),
+      unwrapApiResponse(await updateCourse(courseId, updates), "Failed to update course"),
 
     onSuccess: (_data, { courseId }) => {
       void queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) });
@@ -283,7 +280,9 @@ export function useCourseStats(createdBy?: string) {
 
 export function useCourseAnalytics(courseId: string | null) {
   return useQuery<LmsCourseAnalytics>({
-    queryKey: courseId ? courseKeys.analytics(courseId) : (["lms", "analytics", "__none__"] as const),
+    queryKey: courseId
+      ? courseKeys.analytics(courseId)
+      : (["lms", "analytics", "__none__"] as const),
     queryFn: async (): Promise<LmsCourseAnalytics> => {
       const response = await getCourseAnalytics(courseId!);
       if (!response.success || !response.data) {

@@ -2,14 +2,7 @@
 // CourseAnalyticsPanel — admin/staff course performance metrics
 // ---------------------------------------------------------------------------
 
-import {
-  Users,
-  UserCheck,
-  Trophy,
-  BarChart3,
-  ClipboardCheck,
-  FileText,
-} from "lucide-react";
+import { Users, UserCheck, Trophy, BarChart3, ClipboardCheck, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCourseAnalytics } from "@/modules/courses/hooks/useCourses";
@@ -87,16 +80,8 @@ export function CourseAnalyticsPanel({ course }: CourseAnalyticsPanelProps) {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
-          label="Total enrollments"
-          value={analytics.total_enrollments}
-          icon={Users}
-        />
-        <MetricCard
-          label="Active learners"
-          value={analytics.active_enrollments}
-          icon={UserCheck}
-        />
+        <MetricCard label="Total enrollments" value={analytics.total_enrollments} icon={Users} />
+        <MetricCard label="Active learners" value={analytics.active_enrollments} icon={UserCheck} />
         <MetricCard
           label="Completions"
           value={analytics.completions}

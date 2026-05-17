@@ -32,7 +32,13 @@ export function useLessonContent(lesson: LmsLesson | null) {
     return () => {
       cancelled = true;
     };
-  }, [lesson?.id, lesson?.lesson_type, lesson?.video_url, lesson?.video_storage_path, lesson?.content]);
+  }, [
+    lesson?.id,
+    lesson?.lesson_type,
+    lesson?.video_url,
+    lesson?.video_storage_path,
+    lesson?.content,
+  ]);
 
   useEffect(() => {
     if (!lesson || lesson.lesson_type !== "quiz") {

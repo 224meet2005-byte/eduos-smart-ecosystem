@@ -34,10 +34,7 @@ interface LinkedStudentCardsProps {
  */
 function SkeletonCard() {
   return (
-    <div
-      className="rounded-xl border border-border bg-card p-4 animate-pulse"
-      aria-hidden="true"
-    >
+    <div className="rounded-xl border border-border bg-card p-4 animate-pulse" aria-hidden="true">
       <div className="flex items-start gap-3">
         {/* Avatar placeholder */}
         <div className="h-10 w-10 shrink-0 rounded-full bg-muted" />
@@ -77,9 +74,7 @@ function StudentCard({ student }: { student: Student }) {
         {/* Name + admission number */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{name}</p>
-          <p className="font-mono text-xs text-muted-foreground">
-            {student.admission_no}
-          </p>
+          <p className="font-mono text-xs text-muted-foreground">{student.admission_no}</p>
         </div>
 
         {/* Status badge */}
@@ -118,11 +113,7 @@ export function LinkedStudentCards({ students, isLoading }: LinkedStudentCardsPr
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div
-        className="grid gap-3 sm:grid-cols-2"
-        role="status"
-        aria-label="Loading linked students"
-      >
+      <div className="grid gap-3 sm:grid-cols-2" role="status" aria-label="Loading linked students">
         <SkeletonCard />
         <SkeletonCard />
         <SkeletonCard />

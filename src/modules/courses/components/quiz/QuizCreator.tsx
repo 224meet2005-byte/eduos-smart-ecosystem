@@ -202,9 +202,7 @@ function ChoiceEditor({ choices, questionType, onChange }: ChoiceEditorProps) {
             )}
             title="Mark as correct"
           >
-            {choice.is_correct && (
-              <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-            )}
+            {choice.is_correct && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
           </button>
 
           {/* Choice text */}
@@ -487,9 +485,7 @@ export function QuizCreator({
 
   const deleteQuestionLocal = useCallback((localId: string) => {
     setQuestions((prev) =>
-      prev
-        .filter((q) => q.localId !== localId)
-        .map((q, i) => ({ ...q, position: i })),
+      prev.filter((q) => q.localId !== localId).map((q, i) => ({ ...q, position: i })),
     );
   }, []);
 
@@ -726,9 +722,7 @@ export function QuizCreator({
               type="number"
               min={1}
               value={settings.max_attempts}
-              onChange={(e) =>
-                setSettings((s) => ({ ...s, max_attempts: Number(e.target.value) }))
-              }
+              onChange={(e) => setSettings((s) => ({ ...s, max_attempts: Number(e.target.value) }))}
             />
           </div>
 
@@ -785,12 +779,7 @@ export function QuizCreator({
             <p className="text-xs text-muted-foreground mt-1">
               Click "Add Question" to start building your quiz.
             </p>
-            <Button
-              type="button"
-              onClick={addQuestion}
-              className="mt-4 gap-1.5"
-              size="sm"
-            >
+            <Button type="button" onClick={addQuestion} className="mt-4 gap-1.5" size="sm">
               <Plus className="h-3.5 w-3.5" />
               Add First Question
             </Button>

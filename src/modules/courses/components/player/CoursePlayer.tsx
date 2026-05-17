@@ -5,7 +5,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, StickyNote, Package, AlertCircle, FileText, Clock, BookOpen } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  StickyNote,
+  Package,
+  AlertCircle,
+  FileText,
+  Clock,
+  BookOpen,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -105,14 +114,16 @@ function TextContent({
                 • Article
               </span>
             </div>
-            <p className="text-lg font-bold leading-tight text-foreground tracking-tight">{lesson.title}</p>
+            <p className="text-lg font-bold leading-tight text-foreground tracking-tight">
+              {lesson.title}
+            </p>
           </div>
         </div>
 
-        <Button 
-          variant="default" 
-          size="lg" 
-          onClick={onComplete} 
+        <Button
+          variant="default"
+          size="lg"
+          onClick={onComplete}
           className="rounded-full px-8 shadow-lg hover:shadow-primary/20 transition-all font-bold h-12 bg-primary hover:-translate-y-0.5"
         >
           Mark as Complete
@@ -133,8 +144,8 @@ function TextContent({
           </div>
         )}
         <div className="mt-20 flex flex-col items-center justify-center border-t border-border/40 pt-12">
-          <Button 
-            onClick={onComplete} 
+          <Button
+            onClick={onComplete}
             size="lg"
             className="rounded-full px-10 h-14 text-base font-semibold shadow-lg hover:-translate-y-1 transition-all duration-300"
           >
@@ -207,7 +218,8 @@ function PdfViewer({ lesson, onComplete }: { lesson: LmsLesson; onComplete: () =
     );
   }
 
-  const displayTitle = lesson.title?.toLowerCase() === "pdf" ? "Course Documentation" : lesson.title;
+  const displayTitle =
+    lesson.title?.toLowerCase() === "pdf" ? "Course Documentation" : lesson.title;
 
   return (
     <div className="flex flex-col h-[85vh] w-full bg-background relative group">
@@ -225,7 +237,9 @@ function PdfViewer({ lesson, onComplete }: { lesson: LmsLesson; onComplete: () =
                 • PDF Guide
               </span>
             </div>
-            <p className="text-lg font-bold leading-tight text-foreground tracking-tight">{displayTitle}</p>
+            <p className="text-lg font-bold leading-tight text-foreground tracking-tight">
+              {displayTitle}
+            </p>
           </div>
         </div>
 
@@ -246,10 +260,10 @@ function PdfViewer({ lesson, onComplete }: { lesson: LmsLesson; onComplete: () =
           </div>
         </div>
 
-        <Button 
-          variant="default" 
-          size="lg" 
-          onClick={onComplete} 
+        <Button
+          variant="default"
+          size="lg"
+          onClick={onComplete}
           className="rounded-full px-8 shadow-lg hover:shadow-primary/20 transition-all font-bold h-12 bg-primary hover:-translate-y-0.5"
         >
           Mark as Complete
@@ -361,16 +375,19 @@ export function CoursePlayer({
 
   // ── Lesson selection ──────────────────────────────────────────────────────
 
-  const handleLessonSelect = useCallback((lesson: LmsLesson) => {
-    setCurrentLesson(lesson);
-    setActiveTab("notes");
-    void navigate({
-      to: "/dashboard/student/learn/$courseId",
-      params: { courseId: course.id },
-      search: { lessonId: lesson.id },
-      replace: true,
-    });
-  }, [navigate, course.id]);
+  const handleLessonSelect = useCallback(
+    (lesson: LmsLesson) => {
+      setCurrentLesson(lesson);
+      setActiveTab("notes");
+      void navigate({
+        to: "/dashboard/student/learn/$courseId",
+        params: { courseId: course.id },
+        search: { lessonId: lesson.id },
+        replace: true,
+      });
+    },
+    [navigate, course.id],
+  );
 
   // ── Video progress ────────────────────────────────────────────────────────
 
@@ -416,7 +433,11 @@ export function CoursePlayer({
   const renderContent = () => {
     const lesson = activeLesson ?? currentLesson;
 
-    if (materialsLoading && lesson && (lesson.lesson_type === "pdf" || lesson.lesson_type === "video")) {
+    if (
+      materialsLoading &&
+      lesson &&
+      (lesson.lesson_type === "pdf" || lesson.lesson_type === "video")
+    ) {
       return (
         <div className="flex min-h-96 flex-1 items-center justify-center">
           <div className="size-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -609,18 +630,21 @@ export function CoursePlayer({
 
             {/* ── Notes / Resources tabs ───────────────────────────────────── */}
             <div className="bg-card rounded-3xl border border-border/40 shadow-sm overflow-hidden">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "notes" | "resources")}>
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as "notes" | "resources")}
+              >
                 <div className="border-b border-border/40 bg-muted/10 px-6 pt-4 pb-0">
                   <TabsList className="mb-0 h-auto bg-transparent p-0 flex gap-6 w-full justify-start rounded-none border-0">
-                    <TabsTrigger 
-                      value="notes" 
+                    <TabsTrigger
+                      value="notes"
                       className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-2 pb-4 pt-2 font-semibold text-muted-foreground data-[state=active]:text-foreground transition-all"
                     >
                       <StickyNote className="size-4" />
                       Personal Notes
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="resources" 
+                    <TabsTrigger
+                      value="resources"
                       className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-2 pb-4 pt-2 font-semibold text-muted-foreground data-[state=active]:text-foreground transition-all"
                     >
                       <Package className="size-4" />
@@ -631,7 +655,10 @@ export function CoursePlayer({
 
                 <div className="p-6 md:p-8 min-h-64">
                   {/* Notes */}
-                  <TabsContent value="notes" className="animate-in fade-in slide-in-from-bottom-2 duration-300 mt-0">
+                  <TabsContent
+                    value="notes"
+                    className="animate-in fade-in slide-in-from-bottom-2 duration-300 mt-0"
+                  >
                     <div className="space-y-4">
                       <p className="text-sm text-muted-foreground/80 font-medium">
                         Notes are saved automatically to your browser.
@@ -646,8 +673,11 @@ export function CoursePlayer({
                   </TabsContent>
 
                   {/* Resources */}
-                  <TabsContent value="resources" className="animate-in fade-in slide-in-from-bottom-2 duration-300 mt-0">
-                    {(activeLesson || currentLesson || allLessons[0]) ? (
+                  <TabsContent
+                    value="resources"
+                    className="animate-in fade-in slide-in-from-bottom-2 duration-300 mt-0"
+                  >
+                    {activeLesson || currentLesson || allLessons[0] ? (
                       <ResourcesPanel
                         lesson={activeLesson ?? currentLesson ?? allLessons[0]!}
                         materials={activeLesson?.materials ?? currentLesson?.materials ?? []}
@@ -656,7 +686,9 @@ export function CoursePlayer({
                     ) : (
                       <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
                         <Package className="size-10 text-muted-foreground/30" />
-                        <p className="text-sm font-medium text-muted-foreground">No resources available for this lesson.</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          No resources available for this lesson.
+                        </p>
                       </div>
                     )}
                   </TabsContent>

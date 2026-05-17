@@ -51,11 +51,7 @@ function CreateCoursePage() {
   return (
     <ProtectedRoute allowedRoles={["admin", "staff"]}>
       <div className="max-w-4xl mx-auto">
-        <CourseWizard
-          courseId={edit}
-          onComplete={handleComplete}
-          onCancel={handleCancel}
-        />
+        <CourseWizard courseId={edit} onComplete={handleComplete} onCancel={handleCancel} />
       </div>
     </ProtectedRoute>
   );

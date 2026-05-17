@@ -62,7 +62,10 @@ export function CourseEnrollmentsList({ courseId }: CourseEnrollmentsListProps) 
           const pct = progress?.completion_pct ?? 0;
 
           return (
-            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <li
+              key={row.id}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
                   {student?.name ?? "Student"}

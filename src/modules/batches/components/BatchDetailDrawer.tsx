@@ -150,7 +150,9 @@ export function BatchDetailDrawer({
             <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
               <Users className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">No students assigned</p>
-              <p className="mt-1 text-xs text-muted-foreground">Assign students to use this batch in attendance.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Assign students to use this batch in attendance.
+              </p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -163,7 +165,9 @@ export function BatchDetailDrawer({
                     {getInitials(student.user?.name ?? "?")}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{student.user?.name ?? "Unknown"}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {student.user?.name ?? "Unknown"}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{student.admission_no}</p>
                   </div>
                   <button

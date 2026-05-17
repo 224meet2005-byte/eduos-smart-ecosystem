@@ -130,6 +130,64 @@ export interface Staff {
   user?: User;
 }
 
+/** Row in the `staff_assignments` table. */
+export interface StaffAssignment {
+  id: string;
+  institute_id: string;
+  staff_id: string;
+  batch_id: string | null;
+  course_name: string | null;
+  subject_name: string | null;
+  assigned_at: string;
+  assigned_by: string | null;
+  created_at?: string;
+
+  // Joined relations
+  batch?: Batch;
+  assigned_by_user?: Pick<User, "id" | "name" | "role">;
+}
+
+/** Batch-specific staff assignment row. */
+export interface StaffBatchAssignment extends StaffAssignment {
+  batch_id: string;
+  batch?: Batch;
+}
+
+/** Batch option used by the staff management UI. */
+export type StaffBatchOption = Batch;
+
+/** Payload accepted when admitting a new staff member. */
+export interface AdmitStaffPayload {
+  institute_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  designation: string;
+  department: string;
+  qualification: string;
+  joining_date: string;
+  role_name: string;
+  assignments?: Array<{
+    batch_id?: string;
+    course_name?: string;
+    subject_name?: string;
+  }>;
+}
+
+/** Result returned after admitting or resetting a staff credential. */
+export interface AdmitStaffResult {
+  staff_id: string;
+  user_id: string;
+  email: string;
+  temporary_password: string;
+  role_name: string;
+  assignments?: Array<{
+    batch_id?: string;
+    course_name?: string;
+    subject_name?: string;
+  }>;
+}
+
 // ── Auth ───────────────────────────────────────────────────────────────────
 
 /** Shape of global authentication state (used in Zustand + context). */

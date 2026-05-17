@@ -213,24 +213,24 @@ export function CreateSessionModal({
                 </Link>
               </div>
             ) : (
-            <select
-              id="cs-batch"
-              className={INPUT_CLASS}
-              value={batchId ?? ""}
-              onChange={(e) =>
-                setValue("batch_id", e.target.value === "" ? null : e.target.value, {
-                  shouldValidate: true,
-                })
-              }
-              disabled={isSubmitting}
-            >
-              <option value="">— Select a batch —</option>
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
+              <select
+                id="cs-batch"
+                className={INPUT_CLASS}
+                value={batchId ?? ""}
+                onChange={(e) =>
+                  setValue("batch_id", e.target.value === "" ? null : e.target.value, {
+                    shouldValidate: true,
+                  })
+                }
+                disabled={isSubmitting}
+              >
+                <option value="">— Select a batch —</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
             )}
             {errors.batch_id && (
               <p className="mt-1 text-xs text-destructive">{errors.batch_id.message}</p>

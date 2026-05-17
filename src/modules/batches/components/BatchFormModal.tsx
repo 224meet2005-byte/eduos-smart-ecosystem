@@ -151,7 +151,10 @@ export function BatchFormModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2"
+        >
           <div>
             <label htmlFor="batch_name" className={LABEL_CLASS}>
               Batch Name
@@ -196,7 +199,12 @@ export function BatchFormModal({
             <label htmlFor="start_date" className={LABEL_CLASS}>
               Start Date
             </label>
-            <input id="start_date" type="date" {...register("start_date")} className={INPUT_CLASS} />
+            <input
+              id="start_date"
+              type="date"
+              {...register("start_date")}
+              className={INPUT_CLASS}
+            />
             {errors.start_date && (
               <p className="mt-1 text-xs text-destructive">{errors.start_date.message}</p>
             )}
@@ -216,7 +224,13 @@ export function BatchFormModal({
             <label htmlFor="capacity" className={LABEL_CLASS}>
               Capacity
             </label>
-            <input id="capacity" type="number" min={1} {...register("capacity")} className={INPUT_CLASS} />
+            <input
+              id="capacity"
+              type="number"
+              min={1}
+              {...register("capacity")}
+              className={INPUT_CLASS}
+            />
             {errors.capacity && (
               <p className="mt-1 text-xs text-destructive">{errors.capacity.message}</p>
             )}
@@ -231,7 +245,9 @@ export function BatchFormModal({
               <option value="inactive">Inactive</option>
               <option value="archived">Archived</option>
             </select>
-            {errors.status && <p className="mt-1 text-xs text-destructive">{errors.status.message}</p>}
+            {errors.status && (
+              <p className="mt-1 text-xs text-destructive">{errors.status.message}</p>
+            )}
           </div>
 
           <div className="col-span-1 mt-2 flex items-center justify-end gap-3 md:col-span-2">

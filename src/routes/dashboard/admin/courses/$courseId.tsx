@@ -34,8 +34,7 @@ function CourseDetailPage() {
   const { data: course, isLoading, error } = useCourseDetail(courseId);
   const [enrollOpen, setEnrollOpen] = useState(false);
 
-  const canManage =
-    !isStaff || (course && user?.id && course.created_by === user.id);
+  const canManage = !isStaff || (course && user?.id && course.created_by === user.id);
 
   if (isLoading) {
     return (
@@ -184,5 +183,3 @@ function CourseDetailPage() {
     </ProtectedRoute>
   );
 }
-
-

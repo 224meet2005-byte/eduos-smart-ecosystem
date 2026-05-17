@@ -63,15 +63,11 @@ export async function getLessonMaterials(
   return { data: (data ?? []) as LmsLessonMaterial[], error: null, success: true };
 }
 
-export function findPrimaryPdfMaterial(
-  materials: LmsLessonMaterial[],
-): LmsLessonMaterial | null {
+export function findPrimaryPdfMaterial(materials: LmsLessonMaterial[]): LmsLessonMaterial | null {
   return materials.find(isPdfMaterial) ?? null;
 }
 
-export function findPrimaryVideoMaterial(
-  materials: LmsLessonMaterial[],
-): LmsLessonMaterial | null {
+export function findPrimaryVideoMaterial(materials: LmsLessonMaterial[]): LmsLessonMaterial | null {
   return materials.find(isVideoMaterial) ?? null;
 }
 
@@ -114,9 +110,7 @@ export async function resolveLessonPdfUrl(
 /**
  * Merge lesson row with materials (fetch when nested join omitted them).
  */
-export async function hydrateLessonWithMaterials(
-  lesson: LmsLesson,
-): Promise<LmsLesson> {
+export async function hydrateLessonWithMaterials(lesson: LmsLesson): Promise<LmsLesson> {
   if (lesson.materials && lesson.materials.length > 0) return lesson;
 
   const needsMaterials =

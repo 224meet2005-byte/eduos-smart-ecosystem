@@ -154,7 +154,10 @@ export function LinkParentToStudentModal({
 
           {/* Relationship type */}
           <div>
-            <label htmlFor="relationType" className="block text-xs font-medium text-foreground mb-2">
+            <label
+              htmlFor="relationType"
+              className="block text-xs font-medium text-foreground mb-2"
+            >
               Relationship Type <span className="text-destructive">*</span>
             </label>
             <select

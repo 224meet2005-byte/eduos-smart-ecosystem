@@ -23,12 +23,7 @@ const fixTitle = (title: string) => {
   return title;
 };
 
-export function PlayerHeader({
-  course,
-  currentLesson,
-  completionPct,
-  onBack,
-}: PlayerHeaderProps) {
+export function PlayerHeader({ course, currentLesson, completionPct, onBack }: PlayerHeaderProps) {
   const isComplete = completionPct >= 100;
   const courseTitle = fixTitle(course.title);
   const lessonTitle = fixTitle(currentLesson?.title ?? "");
@@ -57,7 +52,10 @@ export function PlayerHeader({
                 {courseTitle}
               </p>
               {course.category && (
-                <Badge variant="secondary" className="hidden lg:flex h-4 px-1.5 text-[9px] font-bold uppercase tracking-tighter bg-primary/5 text-primary border-primary/10">
+                <Badge
+                  variant="secondary"
+                  className="hidden lg:flex h-4 px-1.5 text-[9px] font-bold uppercase tracking-tighter bg-primary/5 text-primary border-primary/10"
+                >
                   <Tag className="mr-1 size-2" />
                   {course.category.name}
                 </Badge>
@@ -79,9 +77,7 @@ export function PlayerHeader({
           </div>
           <div className="flex items-center gap-2">
             <Clock className="size-3.5 text-primary/60" />
-            <span className="text-xs font-medium">
-              {course.estimated_duration_mins} mins
-            </span>
+            <span className="text-xs font-medium">{course.estimated_duration_mins} mins</span>
           </div>
         </div>
 
@@ -100,8 +96,10 @@ export function PlayerHeader({
             value={completionPct}
             className={cn(
               "h-1.5 bg-muted/60",
-              isComplete ? "[&>div]:bg-emerald-500 [&>div]:shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "[&>div]:bg-primary [&>div]:shadow-[0_0_10px_rgba(59,130,246,0.5)]",
-              "[&>div]:transition-all [&>div]:duration-500"
+              isComplete
+                ? "[&>div]:bg-emerald-500 [&>div]:shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                : "[&>div]:bg-primary [&>div]:shadow-[0_0_10px_rgba(59,130,246,0.5)]",
+              "[&>div]:transition-all [&>div]:duration-500",
             )}
           />
         </div>
@@ -127,7 +125,7 @@ export function PlayerHeader({
         className={cn(
           "h-0.5 rounded-none bg-muted/60 md:hidden",
           isComplete ? "[&>div]:bg-emerald-500" : "[&>div]:bg-primary",
-          "[&>div]:transition-all [&>div]:duration-500"
+          "[&>div]:transition-all [&>div]:duration-500",
         )}
       />
     </header>

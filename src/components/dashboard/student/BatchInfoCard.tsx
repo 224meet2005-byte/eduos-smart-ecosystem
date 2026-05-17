@@ -85,7 +85,9 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
 function InfoPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );

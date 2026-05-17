@@ -26,12 +26,7 @@ import {
 } from "@/modules/courses/services/assignment.service";
 import { uploadAssignmentSubmission } from "@/modules/courses/services/upload.service";
 import { cn } from "@/lib/utils";
-import type {
-  LmsLesson,
-  LmsEnrollment,
-  LmsAssignment,
-  LmsAssignmentSubmission,
-} from "@/types";
+import type { LmsLesson, LmsEnrollment, LmsAssignment, LmsAssignmentSubmission } from "@/types";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -194,9 +189,7 @@ export function AssignmentPanel({
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
         <AlertCircle className="size-10 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">
-          {error ?? "Assignment not found."}
-        </p>
+        <p className="text-sm text-muted-foreground">{error ?? "Assignment not found."}</p>
       </div>
     );
   }
@@ -215,9 +208,7 @@ export function AssignmentPanel({
           <div>
             <h3 className="font-semibold text-foreground">{assignment.title}</h3>
             {assignment.description && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {assignment.description}
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{assignment.description}</p>
             )}
           </div>
         </div>
@@ -306,8 +297,7 @@ export function AssignmentPanel({
 
   // ── Submission form ────────────────────────────────────────────────────────
 
-  const isPastDue =
-    assignment.due_date && new Date() > new Date(assignment.due_date);
+  const isPastDue = assignment.due_date && new Date() > new Date(assignment.due_date);
 
   return (
     <div className="space-y-6 p-6">
@@ -317,9 +307,7 @@ export function AssignmentPanel({
         <div>
           <h3 className="font-semibold text-foreground">{assignment.title}</h3>
           {assignment.description && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {assignment.description}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{assignment.description}</p>
           )}
         </div>
       </div>
@@ -334,9 +322,7 @@ export function AssignmentPanel({
           <div
             className={cn(
               "flex items-center gap-1.5",
-              isPastDue
-                ? "text-rose-600 dark:text-rose-400"
-                : "text-muted-foreground",
+              isPastDue ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground",
             )}
           >
             <Calendar className="size-4" />
@@ -356,9 +342,7 @@ export function AssignmentPanel({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Instructions
           </p>
-          <p className="text-sm whitespace-pre-wrap text-foreground">
-            {assignment.instructions}
-          </p>
+          <p className="text-sm whitespace-pre-wrap text-foreground">{assignment.instructions}</p>
         </div>
       )}
 
@@ -394,8 +378,7 @@ export function AssignmentPanel({
                 Attachments
               </label>
               <p className="mb-2 text-xs text-muted-foreground">
-                Accepted:{" "}
-                {assignment.accepted_file_types.join(", ")}
+                Accepted: {assignment.accepted_file_types.join(", ")}
               </p>
 
               {/* Selected files */}

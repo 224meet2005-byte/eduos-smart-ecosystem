@@ -27,7 +27,7 @@ export function isYouTubePlaylistOrChannelUrl(url: string): boolean {
     const u = new URL(url.trim());
     const host = u.hostname.replace(/^www\./, "");
     if (host === "youtu.be") return false;
-    if (u.pathname === "/playlist" || u.searchParams.has("list") && !u.searchParams.get("v")) {
+    if (u.pathname === "/playlist" || (u.searchParams.has("list") && !u.searchParams.get("v"))) {
       return true;
     }
     if (u.pathname.startsWith("/channel/") || u.pathname.startsWith("/@")) {

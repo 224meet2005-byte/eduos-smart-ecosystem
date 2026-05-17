@@ -92,7 +92,7 @@ export function CatalogCourseCard({ course, onOpenCourse }: CatalogCourseCardPro
             </span>
           </div>
         )}
-        
+
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
@@ -110,7 +110,7 @@ export function CatalogCourseCard({ course, onOpenCourse }: CatalogCourseCardPro
         <h3 className="line-clamp-2 text-base font-bold leading-tight text-foreground transition-colors group-hover:text-primary mb-2">
           {course.title}
         </h3>
-        
+
         {course.subtitle && (
           <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed mb-4">
             {course.subtitle}
@@ -140,13 +140,15 @@ export function CatalogCourseCard({ course, onOpenCourse }: CatalogCourseCardPro
       </CardContent>
 
       <CardFooter className="p-5 pt-0">
-        <Button 
+        <Button
           className={cn(
-            "w-full gap-2 rounded-xl transition-all duration-300", 
-            isEnrolled ? "bg-primary text-primary-foreground hover:bg-primary hover:shadow-md" : "hover:bg-primary/90"
-          )} 
+            "w-full gap-2 rounded-xl transition-all duration-300",
+            isEnrolled
+              ? "bg-primary text-primary-foreground hover:bg-primary hover:shadow-md"
+              : "hover:bg-primary/90",
+          )}
           variant={isEnrolled ? "default" : "default"}
-          onClick={handlePrimary} 
+          onClick={handlePrimary}
           disabled={busy}
         >
           {busy ? (

@@ -10,8 +10,7 @@ export const LMS_STORAGE_BUCKETS = {
   submissions: "lms-assignment-submissions",
 } as const;
 
-export type LmsStorageBucket =
-  (typeof LMS_STORAGE_BUCKETS)[keyof typeof LMS_STORAGE_BUCKETS];
+export type LmsStorageBucket = (typeof LMS_STORAGE_BUCKETS)[keyof typeof LMS_STORAGE_BUCKETS];
 
 /** Default signed-URL TTL for lesson videos (2 hours). */
 export const LMS_VIDEO_SIGNED_URL_TTL = 7200;

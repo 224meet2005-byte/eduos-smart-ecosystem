@@ -44,10 +44,30 @@ export function AttendanceStatsCard({ stats }: AttendanceStatsCardProps) {
       </CardHeader>
       <CardContent className="space-y-6 p-6">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={CheckCircle2} label="Present" value={formatCount(stats.present, stats.total_sessions)} tone="text-emerald-500" />
-          <Metric icon={CircleX} label="Absent" value={formatCount(stats.absent, stats.total_sessions)} tone="text-rose-500" />
-          <Metric icon={Clock3} label="Late" value={formatCount(stats.late, stats.total_sessions)} tone="text-amber-500" />
-          <Metric icon={MinusCircle} label="Leave" value={formatCount(stats.leave, stats.total_sessions)} tone="text-sky-500" />
+          <Metric
+            icon={CheckCircle2}
+            label="Present"
+            value={formatCount(stats.present, stats.total_sessions)}
+            tone="text-emerald-500"
+          />
+          <Metric
+            icon={CircleX}
+            label="Absent"
+            value={formatCount(stats.absent, stats.total_sessions)}
+            tone="text-rose-500"
+          />
+          <Metric
+            icon={Clock3}
+            label="Late"
+            value={formatCount(stats.late, stats.total_sessions)}
+            tone="text-amber-500"
+          />
+          <Metric
+            icon={MinusCircle}
+            label="Leave"
+            value={formatCount(stats.leave, stats.total_sessions)}
+            tone="text-sky-500"
+          />
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-muted/20 p-5">
@@ -60,7 +80,8 @@ export function AttendanceStatsCard({ stats }: AttendanceStatsCardProps) {
           </div>
           <Progress value={stats.percentage} className="mt-4 h-2" />
           <p className="mt-3 text-sm text-muted-foreground">
-            Present {stats.present_percentage}% · Absent {stats.absent_percentage}% · Late {stats.late_percentage}% · Leave {stats.leave_percentage}%
+            Present {stats.present_percentage}% · Absent {stats.absent_percentage}% · Late{" "}
+            {stats.late_percentage}% · Leave {stats.leave_percentage}%
           </p>
         </div>
       </CardContent>

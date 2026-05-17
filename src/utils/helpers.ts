@@ -135,3 +135,85 @@ export function buildQueryString(
 export function classNames(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ");
 }
+
+/**
+ * Copy text to the clipboard with a browser fallback.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall back to the legacy path below.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+
+  document.body.removeChild(textarea);
+  return copied;
+}
+
+/**
+ * Normalize unknown errors into a displayable message.
+ */
+export function getErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim()) {
+      return maybeMessage;
+    }
+
+    const maybeError = (error as { error?: unknown }).error;
+    if (maybeError && typeof maybeError === "object") {
+      const nestedMessage = (maybeError as { message?: unknown }).message;
+      if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+        return nestedMessage;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * Detect aborted fetches and other cancellation errors.
+ */
+export function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  if (error instanceof DOMException) {
+    return error.name === "AbortError";
+  }
+
+  const maybeError = error as { name?: unknown; code?: unknown };
+  return maybeError.name === "AbortError" || maybeError.code === 20;
+}

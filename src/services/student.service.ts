@@ -91,7 +91,8 @@ function buildMonthlyTrend(records: StudentAttendanceRecord[]): AttendanceTrendP
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -119,7 +120,8 @@ function buildWeeklyTrend(records: StudentAttendanceRecord[]): AttendanceTrendPo
 
   return Array.from(buckets.values()).map((bucket) => ({
     ...bucket,
-    percentage: bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
+    percentage:
+      bucket.total > 0 ? Math.round(((bucket.present + bucket.late) / bucket.total) * 100) : 0,
   }));
 }
 
@@ -354,8 +356,6 @@ export async function getStudentHistory(studentId: string): Promise<ApiResponse<
   return { data: data as StudentHistory[], error: null, success: true };
 }
 
-
-
 /**
  * Return a student with all currently linked parents.
  *
@@ -429,8 +429,7 @@ export async function getCurrentStudentDashboard(
       history,
       stats,
     },
-    error:
-      [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
+    error: [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
     success: true,
   };
 }
@@ -444,10 +443,7 @@ export async function getCurrentStudentDashboard(
  * before calling this function.  `admission_no` must be unique per institute.
  */
 export async function createStudent(
-  payload: Pick<
-    Student,
-    "institute_id" | "user_id" | "admission_no" | "batch_id" | "status"
-  >,
+  payload: Pick<Student, "institute_id" | "user_id" | "admission_no" | "batch_id" | "status">,
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -465,9 +461,7 @@ export async function createStudent(
  */
 export async function updateStudent(
   id: string,
-  payload: Partial<
-    Pick<Student, "admission_no" | "batch_id" | "status" | "emergency_contact">
-  >,
+  payload: Partial<Pick<Student, "admission_no" | "batch_id" | "status" | "emergency_contact">>,
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -553,8 +547,8 @@ export async function admitStudent(
     p_emergency_contact: payload.emergency_contact,
     p_parent_name: hasParentBlock ? payload.parent_name : null,
     p_parent_email: hasParentBlock ? payload.parent_email : null,
-    p_parent_phone: hasParentBlock ? (payload.parent_phone?.trim() || null) : null,
-    p_parent_occupation: hasParentBlock ? (payload.parent_occupation?.trim() || null) : null,
+    p_parent_phone: hasParentBlock ? payload.parent_phone?.trim() || null : null,
+    p_parent_occupation: hasParentBlock ? payload.parent_occupation?.trim() || null : null,
     p_parent_relation_type: hasParentBlock ? payload.parent_relation_type : null,
   });
 

@@ -48,11 +48,7 @@ import {
   updateCourse,
   getCourseById,
 } from "@/modules/courses/services/course.service";
-import {
-  courseKeys,
-  useCourseCurriculum,
-  useCategories,
-} from "@/modules/courses/hooks/useCourses";
+import { courseKeys, useCourseCurriculum, useCategories } from "@/modules/courses/hooks/useCourses";
 import { Step1BasicInfo } from "@/modules/courses/components/wizard/Step1BasicInfo";
 import { Step2Media } from "@/modules/courses/components/wizard/Step2Media";
 import { CurriculumEditor } from "@/modules/courses/components/curriculum/CurriculumEditor";
@@ -581,7 +577,9 @@ export function CourseWizard({
   const handleStep1Save = useCallback(
     async (data: CreateCoursePayload) => {
       if (!isSupabaseConfigured) {
-        toast.error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+        toast.error(
+          "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+        );
         return;
       }
       if (!instituteId || !userId) {
@@ -716,13 +714,13 @@ export function CourseWizard({
         if (result.data) setExistingCourse(result.data);
 
         if (status === "published") {
-          const { publishCourseCurriculum } = await import(
-            "@/modules/courses/services/curriculum.service"
-          );
+          const { publishCourseCurriculum } =
+            await import("@/modules/courses/services/curriculum.service");
           const curriculumRes = await publishCourseCurriculum(state.courseId);
           if (!curriculumRes.success) {
             toast.warning(
-              curriculumRes.error ?? "Course published but some lessons may stay hidden until republished",
+              curriculumRes.error ??
+                "Course published but some lessons may stay hidden until republished",
             );
           }
         }
@@ -790,7 +788,8 @@ export function CourseWizard({
 
   // ── Render current step content ───────────────────────────────────────────
 
-  const step1Defaults = draftStep1 ?? (existingCourse ? mapCourseToCreatePayload(existingCourse) : undefined);
+  const step1Defaults =
+    draftStep1 ?? (existingCourse ? mapCourseToCreatePayload(existingCourse) : undefined);
 
   const renderStepContent = () => {
     switch (state.currentStep) {

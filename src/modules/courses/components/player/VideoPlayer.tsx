@@ -3,14 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
-  AlertCircle,
-} from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -210,11 +203,7 @@ export function VideoPlayer({
     setCurrentTime(vid.currentTime);
 
     // Fire onComplete at 90% watch time
-    if (
-      !completedFiredRef.current &&
-      vid.duration > 0 &&
-      vid.currentTime / vid.duration >= 0.9
-    ) {
+    if (!completedFiredRef.current && vid.duration > 0 && vid.currentTime / vid.duration >= 0.9) {
       completedFiredRef.current = true;
       onComplete();
     }
@@ -319,10 +308,7 @@ export function VideoPlayer({
     if (!parsed.ok) {
       return <VideoError message={parsed.error} />;
     }
-    const embedUrl = getYouTubeEmbedUrl(
-      parsed.videoId,
-      savedPosition > 30 ? savedPosition : 0,
-    );
+    const embedUrl = getYouTubeEmbedUrl(parsed.videoId, savedPosition > 30 ? savedPosition : 0);
 
     return (
       <div className="flex w-full flex-col items-center justify-center bg-muted/20 p-0 md:p-8 overflow-hidden min-h-[50vh]">
@@ -337,8 +323,15 @@ export function VideoPlayer({
             />
           </div>
           <div className="flex items-center justify-end p-3 bg-slate-950 border-t border-white/5">
-            <span className="text-xs font-medium tracking-wide uppercase text-white/40 mr-5">Watching an external video?</span>
-            <Button variant="secondary" size="sm" onClick={onComplete} className="font-semibold shadow-md">
+            <span className="text-xs font-medium tracking-wide uppercase text-white/40 mr-5">
+              Watching an external video?
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onComplete}
+              className="font-semibold shadow-md"
+            >
               Mark Video Complete
             </Button>
           </div>
@@ -381,146 +374,146 @@ export function VideoPlayer({
         onMouseLeave={() => playing && setShowControls(false)}
       >
         {/* Video element */}
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        className="size-full object-contain"
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onEnded={handleEnded}
-        onError={handleVideoError}
-        onWaiting={() => setLoading(true)}
-        onCanPlay={() => setLoading(false)}
-        onClick={togglePlay}
-        playsInline
-      />
-
-      {/* Buffering spinner */}
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-          <div className="size-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      )}
-
-      {/* Centre play/pause overlay on click */}
-      {!playing && !loading && (
-        <button
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          className="size-full object-contain"
+          onLoadedMetadata={handleLoadedMetadata}
+          onTimeUpdate={handleTimeUpdate}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onEnded={handleEnded}
+          onError={handleVideoError}
+          onWaiting={() => setLoading(true)}
+          onCanPlay={() => setLoading(false)}
           onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/20"
-          aria-label="Play"
-        >
-          <div className="flex size-16 items-center justify-center rounded-full bg-white/90 shadow-xl transition-transform hover:scale-110">
-            <Play className="size-7 translate-x-0.5 text-slate-900" />
-          </div>
-        </button>
-      )}
-
-      {/* Controls overlay */}
-      <div
-        className={cn(
-          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 transition-opacity duration-300",
-          showControls || !playing ? "opacity-100" : "opacity-0",
-        )}
-      >
-        {/* Progress bar */}
-        <Slider
-          min={0}
-          max={100}
-          step={0.1}
-          value={[progressPct]}
-          onValueChange={handleSeek}
-          className="mb-3 cursor-pointer [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:size-3 [&_[role=slider]]:border-0 [&_[role=slider]]:bg-primary [&_[role=slider]]:shadow-none"
-          aria-label="Video progress"
+          playsInline
         />
 
-        <div className="flex items-center gap-2">
-          {/* Play / Pause */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={togglePlay}
-            className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
-            aria-label={playing ? "Pause" : "Play"}
-          >
-            {playing ? (
-              <Pause className="size-4 fill-white" />
-            ) : (
-              <Play className="size-4 fill-white" />
-            )}
-          </Button>
+        {/* Buffering spinner */}
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="size-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        )}
 
-          {/* Volume */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMute}
-            className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
-            aria-label={muted ? "Unmute" : "Mute"}
+        {/* Centre play/pause overlay on click */}
+        {!playing && !loading && (
+          <button
+            onClick={togglePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/20"
+            aria-label="Play"
           >
-            {muted || volume === 0 ? (
-              <VolumeX className="size-4" />
-            ) : (
-              <Volume2 className="size-4" />
-            )}
-          </Button>
+            <div className="flex size-16 items-center justify-center rounded-full bg-white/90 shadow-xl transition-transform hover:scale-110">
+              <Play className="size-7 translate-x-0.5 text-slate-900" />
+            </div>
+          </button>
+        )}
+
+        {/* Controls overlay */}
+        <div
+          className={cn(
+            "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 transition-opacity duration-300",
+            showControls || !playing ? "opacity-100" : "opacity-0",
+          )}
+        >
+          {/* Progress bar */}
           <Slider
             min={0}
             max={100}
-            step={1}
-            value={[muted ? 0 : volume * 100]}
-            onValueChange={handleVolumeChange}
-            className="w-20 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:size-3 [&_[role=slider]]:border-0 [&_[role=slider]]:bg-white [&_[role=slider]]:shadow-none"
-            aria-label="Volume"
+            step={0.1}
+            value={[progressPct]}
+            onValueChange={handleSeek}
+            className="mb-3 cursor-pointer [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:size-3 [&_[role=slider]]:border-0 [&_[role=slider]]:bg-primary [&_[role=slider]]:shadow-none"
+            aria-label="Video progress"
           />
 
-          {/* Time */}
-          <span className="mx-1 flex-1 text-xs tabular-nums text-white/80">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
-
-          {/* Speed */}
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            {/* Play / Pause */}
             <Button
               variant="ghost"
-              size="sm"
-              onClick={() => setShowSpeedMenu((v) => !v)}
-              className="h-7 px-2 text-xs font-medium text-white hover:bg-white/20 hover:text-white"
+              size="icon"
+              onClick={togglePlay}
+              className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
+              aria-label={playing ? "Pause" : "Play"}
             >
-              {speed}x
+              {playing ? (
+                <Pause className="size-4 fill-white" />
+              ) : (
+                <Play className="size-4 fill-white" />
+              )}
             </Button>
-            {showSpeedMenu && (
-              <div className="absolute bottom-8 right-0 rounded-md border border-white/10 bg-slate-900 p-1 shadow-lg">
-                {SPEED_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleSpeedChange(s)}
-                    className={cn(
-                      "block w-full rounded px-3 py-1 text-right text-xs text-white hover:bg-white/10",
-                      speed === s && "font-bold text-primary",
-                    )}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Fullscreen */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleFullscreen}
-            className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
-            aria-label="Toggle fullscreen"
-          >
-            <Maximize className="size-4" />
-          </Button>
+            {/* Volume */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
+              aria-label={muted ? "Unmute" : "Mute"}
+            >
+              {muted || volume === 0 ? (
+                <VolumeX className="size-4" />
+              ) : (
+                <Volume2 className="size-4" />
+              )}
+            </Button>
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[muted ? 0 : volume * 100]}
+              onValueChange={handleVolumeChange}
+              className="w-20 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:size-3 [&_[role=slider]]:border-0 [&_[role=slider]]:bg-white [&_[role=slider]]:shadow-none"
+              aria-label="Volume"
+            />
+
+            {/* Time */}
+            <span className="mx-1 flex-1 text-xs tabular-nums text-white/80">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+
+            {/* Speed */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSpeedMenu((v) => !v)}
+                className="h-7 px-2 text-xs font-medium text-white hover:bg-white/20 hover:text-white"
+              >
+                {speed}x
+              </Button>
+              {showSpeedMenu && (
+                <div className="absolute bottom-8 right-0 rounded-md border border-white/10 bg-slate-900 p-1 shadow-lg">
+                  {SPEED_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleSpeedChange(s)}
+                      className={cn(
+                        "block w-full rounded px-3 py-1 text-right text-xs text-white hover:bg-white/10",
+                        speed === s && "font-bold text-primary",
+                      )}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Fullscreen */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleFullscreen}
+              className="size-8 shrink-0 text-white hover:bg-white/20 hover:text-white"
+              aria-label="Toggle fullscreen"
+            >
+              <Maximize className="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

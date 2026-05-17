@@ -97,7 +97,8 @@ export async function updateBatch(
   const updates: Record<string, unknown> = {};
 
   if (payload.batch_name !== undefined) updates.name = payload.batch_name.trim();
-  if (payload.batch_code !== undefined) updates.batch_code = payload.batch_code.trim().toUpperCase();
+  if (payload.batch_code !== undefined)
+    updates.batch_code = payload.batch_code.trim().toUpperCase();
   if (payload.course_name !== undefined) updates.course_name = payload.course_name.trim();
   if (payload.start_date !== undefined) updates.start_date = payload.start_date;
   if (payload.end_date !== undefined) updates.end_date = payload.end_date;

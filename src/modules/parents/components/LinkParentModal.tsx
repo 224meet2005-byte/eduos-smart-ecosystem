@@ -193,11 +193,7 @@ export function LinkParentModal({
   return (
     <>
       {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        onClick={handleClose}
-        className="fixed inset-0 z-50 bg-black/50"
-      />
+      <div aria-hidden="true" onClick={handleClose} className="fixed inset-0 z-50 bg-black/50" />
 
       {/* Dialog */}
       <div
@@ -216,9 +212,7 @@ export function LinkParentModal({
               <h2 id="link-parent-title" className="text-sm font-semibold text-foreground">
                 Link Parent
               </h2>
-              <p className="text-xs text-muted-foreground truncate max-w-56">
-                {studentName}
-              </p>
+              <p className="text-xs text-muted-foreground truncate max-w-56">{studentName}</p>
             </div>
           </div>
           <button
@@ -245,8 +239,7 @@ export function LinkParentModal({
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Parent linked!</p>
                 <p className="text-xs text-muted-foreground">
-                  {selectedParent?.user?.name ?? "The parent"} has been linked to{" "}
-                  {studentName} as{" "}
+                  {selectedParent?.user?.name ?? "The parent"} has been linked to {studentName} as{" "}
                   <span className="capitalize">{relationType}</span>.
                 </p>
               </div>
@@ -309,13 +302,11 @@ export function LinkParentModal({
                           aria-hidden="true"
                         />
                         <div className="space-y-1">
-                          <p className="text-sm font-medium text-foreground">
-                            Parent not found
-                          </p>
+                          <p className="text-sm font-medium text-foreground">Parent not found</p>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            No parent account exists with that email address. The parent
-                            must first sign into EduOS and complete their profile before
-                            they can be linked to a student.
+                            No parent account exists with that email address. The parent must first
+                            sign into EduOS and complete their profile before they can be linked to
+                            a student.
                           </p>
                         </div>
                       </div>
@@ -359,9 +350,7 @@ export function LinkParentModal({
                                 {parent.user?.email ?? "—"}
                               </p>
                               {parent.occupation && (
-                                <p className="text-xs text-muted-foreground">
-                                  {parent.occupation}
-                                </p>
+                                <p className="text-xs text-muted-foreground">{parent.occupation}</p>
                               )}
                             </div>
                             {/* Selection indicator */}
@@ -449,9 +438,7 @@ export function LinkParentModal({
                 disabled={isLinking || !relationType}
                 className="flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLinking && (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                )}
+                {isLinking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {isLinking ? "Linking…" : "Link Parent"}
               </button>
             )}

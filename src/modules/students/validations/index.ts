@@ -37,63 +37,63 @@ const phoneField = z
  *  - Parent section is optional — if parent_name is provided, parent_email
  *    and parent_relation_type are required. Otherwise all parent fields ignored.
  */
-export const admissionSchema = z.object({
-  // ── Section 1 — Personal Info ─────────────────────────────────────────────
-  fullName: z
-    .string()
-    .min(2, "Full name must be at least 2 characters")
-    .max(100, "Full name must be 100 characters or fewer"),
+export const admissionSchema = z
+  .object({
+    // ── Section 1 — Personal Info ─────────────────────────────────────────────
+    fullName: z
+      .string()
+      .min(2, "Full name must be at least 2 characters")
+      .max(100, "Full name must be 100 characters or fewer"),
 
-  email: z.string().email("Please enter a valid email address"),
+    email: z.string().email("Please enter a valid email address"),
 
-  phone: phoneField,
+    phone: phoneField,
 
-  // ── Section 2 — Academic ──────────────────────────────────────────────────
-  admissionNo: z
-    .string()
-    .min(1, "Admission number is required")
-    .max(50, "Admission number must be 50 characters or fewer"),
+    // ── Section 2 — Academic ──────────────────────────────────────────────────
+    admissionNo: z
+      .string()
+      .min(1, "Admission number is required")
+      .max(50, "Admission number must be 50 characters or fewer"),
 
-  /**
-   * Batch identifier — free-text for now until the batch-selector widget
-   * is wired to live backend data.
-   */
-  batchId: z.string().max(100).optional(),
+    /**
+     * Batch identifier — free-text for now until the batch-selector widget
+     * is wired to live backend data.
+     */
+    batchId: z.string().max(100).optional(),
 
-  // (Identity section removed: Aadhaar is not collected)
+    // (Identity section removed: Aadhaar is not collected)
 
-  // ── Section 4 — Emergency Contact ────────────────────────────────────────
-  emergencyContactName: z.string().max(100).optional(),
-  emergencyContactPhone: z.string().max(20).optional(),
-  emergencyRelationship: z.string().max(50).optional(),
+    // ── Section 4 — Emergency Contact ────────────────────────────────────────
+    emergencyContactName: z.string().max(100).optional(),
+    emergencyContactPhone: z.string().max(20).optional(),
+    emergencyRelationship: z.string().max(50).optional(),
 
-  // ── Section 5 — Parent Details ───────────────────────────────────────────
-  /**
-   * If parent_name is provided, parent_email and parent_relation_type are required.
-   * If parent_name is empty, all parent fields are ignored.
-   * This allows admins to optionally create a parent during student admission.
-   */
-  parentName: z.string().max(100).optional(),
-  parentEmail: z.string().email().optional(),
-  parentPhone: phoneField.optional(),
-  parentOccupation: z.string().max(100).optional(),
-  parentRelationType: z
-    .enum(["father", "mother", "guardian", "sibling", "other"])
-    .optional(),
-}).refine(
-  (data) => {
-    // If parent_name is provided, require email and relation type
-    if (data.parentName) {
-      return !!data.parentEmail && !!data.parentRelationType;
-    }
-    // If parent_name is not provided, parent section is optional
-    return true;
-  },
-  {
-    message: "If providing parent details, parent email and relationship type are required",
-    path: ["parentName"],
-  },
-);
+    // ── Section 5 — Parent Details ───────────────────────────────────────────
+    /**
+     * If parent_name is provided, parent_email and parent_relation_type are required.
+     * If parent_name is empty, all parent fields are ignored.
+     * This allows admins to optionally create a parent during student admission.
+     */
+    parentName: z.string().max(100).optional(),
+    parentEmail: z.string().email().optional(),
+    parentPhone: phoneField.optional(),
+    parentOccupation: z.string().max(100).optional(),
+    parentRelationType: z.enum(["father", "mother", "guardian", "sibling", "other"]).optional(),
+  })
+  .refine(
+    (data) => {
+      // If parent_name is provided, require email and relation type
+      if (data.parentName) {
+        return !!data.parentEmail && !!data.parentRelationType;
+      }
+      // If parent_name is not provided, parent section is optional
+      return true;
+    },
+    {
+      message: "If providing parent details, parent email and relationship type are required",
+      path: ["parentName"],
+    },
+  );
 
 /** TypeScript type inferred from `admissionSchema`. Use with `useForm<AdmissionSchema>`. */
 export type AdmissionSchema = z.infer<typeof admissionSchema>;

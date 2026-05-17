@@ -371,7 +371,8 @@ function AttendancePage() {
 
     console.debug("[attendance.save] payload", {
       session_id: expandedSessionId,
-      attendance_date: sessions.find((session) => session.id === expandedSessionId)?.session_date ?? null,
+      attendance_date:
+        sessions.find((session) => session.id === expandedSessionId)?.session_date ?? null,
       payload: debugRows,
     });
 
@@ -387,11 +388,14 @@ function AttendancePage() {
       const refreshed = await getSessionWithRecords(expandedSessionId);
       if (refreshed.success && refreshed.data) {
         setExpandedRecords(refreshed.data.records);
-        console.debug("[attendance.save] refetched rows", refreshed.data.records.map((row) => ({
-          student_id: row.student_id,
-          attendance_date: refreshed.data?.session_date ?? null,
-          selected_status: row.status,
-        })));
+        console.debug(
+          "[attendance.save] refetched rows",
+          refreshed.data.records.map((row) => ({
+            student_id: row.student_id,
+            attendance_date: refreshed.data?.session_date ?? null,
+            selected_status: row.status,
+          })),
+        );
         toast.success("Attendance saved successfully.");
       } else {
         const refreshError = refreshed.error ?? "Saved, but failed to refresh attendance.";

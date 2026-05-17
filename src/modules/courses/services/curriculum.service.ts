@@ -262,8 +262,7 @@ export async function createLessonMaterialFromUpload(
   }
 
   const signed = await getLessonMaterialSignedUrl(uploadResult.data.storagePath);
-  const fileUrl =
-    signed.success && signed.data ? signed.data : uploadResult.data.storagePath;
+  const fileUrl = signed.success && signed.data ? signed.data : uploadResult.data.storagePath;
 
   return addMaterial({
     lesson_id: lessonId,
