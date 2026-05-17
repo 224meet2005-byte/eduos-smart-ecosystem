@@ -171,7 +171,7 @@ function buildColumns(
  *  5. Joined date
  *  6. Actions (View / Archive or Restore)
  */
-export function StudentTable({
+function StudentTableInner({
   students,
   isLoading,
   onView,
@@ -202,3 +202,5 @@ export function StudentTable({
     />
   );
 }
+
+export const StudentTable = React.memo(StudentTableInner);

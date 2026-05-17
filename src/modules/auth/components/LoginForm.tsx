@@ -47,6 +47,12 @@ export function LoginForm() {
     }
 
     login(result.data.user, result.data.institute);
+
+    if (result.data.passwordChangeRequired) {
+      navigate({ to: "/auth/update-password", search: { type: "recovery" } });
+      return;
+    }
+
     const destination = getDashboardPath(result.data.user.role);
     navigate({ to: destination });
   }

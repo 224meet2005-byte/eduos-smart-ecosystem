@@ -16,7 +16,7 @@
 // signed-in user is automatically recorded as the session conductor.
 // ---------------------------------------------------------------------------
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Loader2, CalendarCheck } from "lucide-react";
@@ -87,7 +87,7 @@ export function CreateSessionModal({
   } = useForm<CreateSessionSchema>({
     resolver: zodResolver(createSessionSchema),
     defaultValues: {
-      batch_id: null,
+      batch_id: "",
       session_date: todayIso(),
       session_type: "daily",
       topic: "",
@@ -95,8 +95,14 @@ export function CreateSessionModal({
     },
   });
 
-  // `batch_id` is nullable — we watch it so the controlled select stays in sync.
   const batchId = watch("batch_id");
+
+  useEffect(() => {
+    if (!isOpen || isBatchesLoading || batches.length === 0) return;
+    if (!batchId) {
+      setValue("batch_id", batches[0].id, { shouldValidate: true });
+    }
+  }, [isOpen, isBatchesLoading, batches, batchId, setValue]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -105,7 +111,7 @@ export function CreateSessionModal({
 
     const result = await createAttendanceSession({
       institute_id: instituteId,
-      batch_id: values.batch_id,
+      batch_id: values.batch_id || null,
       course_id: null,
       conducted_by: user?.id ?? "",
       session_date: values.session_date,
@@ -217,11 +223,7 @@ export function CreateSessionModal({
               id="cs-batch"
               className={INPUT_CLASS}
               value={batchId ?? ""}
-              onChange={(e) =>
-                setValue("batch_id", e.target.value === "" ? null : e.target.value, {
-                  shouldValidate: true,
-                })
-              }
+              onChange={(e) => setValue("batch_id", e.target.value, { shouldValidate: true })}
               disabled={isSubmitting}
             >
               <option value="">— Select a batch —</option>

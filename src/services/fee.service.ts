@@ -49,7 +49,7 @@ export async function getFeeStructures(instituteId: string): Promise<ApiResponse
 
   const { data, error } = await supabase
     .from("fee_structures")
-    .select("*, category:fee_categories(*)")
+    .select("id, name, fee_name, fee_code, fee_type, amount, frequency, recurring_type, academic_year, due_date, category:fee_categories(id, name)")
     .eq("institute_id", instituteId)
     .order("created_at", { ascending: false });
 
@@ -331,7 +331,7 @@ export async function getStudentFees(studentId: string): Promise<ApiResponse<Stu
     .from("student_fees")
     .select(
       `
-      *,
+      id, student_id, fee_structure_id, final_amount, status, due_date, next_due_date, created_at,
       fee_structure:fee_structures(*),
       parent:parents(*, user:users(*)),
       payments:fee_payments(*)
@@ -341,7 +341,14 @@ export async function getStudentFees(studentId: string): Promise<ApiResponse<Stu
     .order("created_at", { ascending: false });
 
   if (error) return { data: null, error: error.message, success: false };
-  return { data: data as StudentFee[], error: null, success: true };
+
+  // Compute paid_so_far client-side for each fee
+  const fees = (data ?? []).map((fee: any) => {
+    const paid_so_far = (fee.payments ?? []).reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0);
+    return { ...fee, paid_so_far };
+  });
+
+  return { data: fees as StudentFee[], error: null, success: true };
 }
 
 /**
@@ -361,9 +368,9 @@ export async function getInstituteStudentFees(
     .from("student_fees")
     .select(
       `
-      *,
-      student:students(*, user:users(*)),
-      fee_structure:fee_structures(*)
+      id, student_id, fee_structure_id, original_amount, discount_amount, final_amount, status, due_date, academic_year, created_at,
+      student:students(id, admission_no, user:users(id, name, email, avatar_url)),
+      fee_structure:fee_structures(id, name, amount)
     `,
     )
     .eq("institute_id", instituteId);
@@ -476,7 +483,7 @@ export async function getRevenueStats(
   // ── Step 1: Fetch fee assignments ──────────────────────────────────────────
   const { data: fees, error: feesError } = await supabase
     .from("student_fees")
-    .select("id, final_amount, paid_so_far, status")
+    .select("id, final_amount, status")
     .eq("institute_id", instituteId)
     .eq("academic_year", academicYear);
 
@@ -485,40 +492,35 @@ export async function getRevenueStats(
   const feeList = fees ?? [];
   const feeIds = feeList.map((f) => f.id as string);
 
-  // Compute pending / overdue totals directly from student_fees metadata.
+  // ── Step 2: Fetch payments for these student fees ─────────────────────────
+  // We need all payments to compute collected totals and monthly trends.
+  const { data: payments, error: paymentsError } = await supabase
+    .from("fee_payments")
+    .select("student_fee_id, amount, payment_date")
+    .in("student_fee_id", feeIds);
+
+  if (paymentsError) return { data: null, error: paymentsError.message, success: false };
+
+  // ── Step 3: Compute totals ────────────────────────────────────────────────
+  // Map payments by student_fee_id for fast lookup
+  const paymentsByFee = new Map<string, number>();
+  for (const p of payments ?? []) {
+    const current = paymentsByFee.get(p.student_fee_id) ?? 0;
+    paymentsByFee.set(p.student_fee_id, current + p.amount);
+  }
+
   let totalPending = 0;
   let totalOverdue = 0;
 
   for (const fee of feeList) {
-    const remaining = Math.max(0, (fee.final_amount ?? 0) - (fee.paid_so_far ?? 0));
+    const paidSoFar = paymentsByFee.get(fee.id) ?? 0;
+    const remaining = Math.max(0, (fee.final_amount ?? 0) - paidSoFar);
     if (fee.status === "pending" || fee.status === "partial") {
       totalPending += remaining;
     } else if (fee.status === "overdue") {
       totalOverdue += remaining;
     }
   }
-
-  // ── Step 2: Early return when no fees exist for this year ─────────────────
-  if (feeIds.length === 0) {
-    return {
-      data: {
-        total_collected: 0,
-        total_pending: totalPending,
-        total_overdue: totalOverdue,
-        collection_this_month: 0,
-      },
-      error: null,
-      success: true,
-    };
-  }
-
-  // ── Step 3: Fetch payments for these student fees ─────────────────────────
-  const { data: payments, error: paymentsError } = await supabase
-    .from("fee_payments")
-    .select("amount, payment_date")
-    .in("student_fee_id", feeIds);
-
-  if (paymentsError) return { data: null, error: paymentsError.message, success: false };
 
   // ── Step 4: Compute collection totals ─────────────────────────────────────
   // ISO date prefix for the first day of the current calendar month.
@@ -567,11 +569,11 @@ export async function getPendingDues(instituteId: string): Promise<ApiResponse<S
     .from("student_fees")
     .select(
       `
-      *,
-      student:students(*, user:users(*)),
-      parent:parents(*, user:users(*)),
-      fee_structure:fee_structures(*),
-      payments:fee_payments(*)
+      id, student_id, fee_structure_id, final_amount, status, due_date,
+      student:students(id, admission_no, user:users(id, name, avatar_url)),
+      parent:parents(id, user:users(id, name, email, phone)),
+      fee_structure:fee_structures(id, name),
+      payments:fee_payments(id, amount, payment_date)
     `,
     )
     .eq("institute_id", instituteId)
@@ -612,14 +614,15 @@ export async function getParentFeeSummary(
     .from("parents")
     .select("*, user:users(*)")
     .eq("id", parentId)
-    .single();
+    .maybeSingle();
 
   if (parentError) return { data: null, error: parentError.message, success: false };
+  if (!parent) return { data: null, error: "Parent record not found.", success: false };
 
   const { data: studentFees, error: feesError } = await supabase
     .from("student_fees")
     .select(
-      `*, student:students(*, user:users(*)), fee_structure:fee_structures(*), payments:fee_payments(*), installments:fee_installments(*)`,
+      `id, student_id, final_amount, status, due_date, next_due_date, created_at, student:students(*, user:users(*)), fee_structure:fee_structures(*), payments:fee_payments(*), installments:fee_installments(*)`,
     )
     .eq("parent_id", parentId)
     .order("created_at", { ascending: false });
@@ -632,21 +635,25 @@ export async function getParentFeeSummary(
 
   for (const fee of (studentFees ?? []) as StudentFee[]) {
     if (!fee.student) continue;
-    const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+
+    // Compute paid_so_far client-side since column was removed
+    const paidSoFar = (fee.payments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0);
+
+    const remaining = Math.max(0, fee.final_amount - paidSoFar);
     totalDue += fee.final_amount;
-    totalPaid += fee.paid_so_far;
+    totalPaid += paidSoFar;
 
     const existing = grouped.get(fee.student.id);
     if (existing) {
       existing.fee_items.push({
-        student_fee: fee,
+        student_fee: { ...fee, paid_so_far: paidSoFar },
         total_due: fee.final_amount,
-        total_paid: fee.paid_so_far,
+        total_paid: paidSoFar,
         remaining_due: remaining,
         next_due_date: fee.next_due_date ?? fee.due_date,
       });
       existing.total_due += fee.final_amount;
-      existing.total_paid += fee.paid_so_far;
+      existing.total_paid += paidSoFar;
       existing.remaining_due += remaining;
       continue;
     }
@@ -655,15 +662,15 @@ export async function getParentFeeSummary(
       student: fee.student,
       fee_items: [
         {
-          student_fee: fee,
+          student_fee: { ...fee, paid_so_far: paidSoFar },
           total_due: fee.final_amount,
-          total_paid: fee.paid_so_far,
+          total_paid: paidSoFar,
           remaining_due: remaining,
           next_due_date: fee.next_due_date ?? fee.due_date,
         },
       ],
       total_due: fee.final_amount,
-      total_paid: fee.paid_so_far,
+      total_paid: paidSoFar,
       remaining_due: remaining,
     });
   }
@@ -692,7 +699,7 @@ export async function getInstituteRevenueAnalytics(
 
   const { data: fees, error: feeError } = await supabase
     .from("student_fees")
-    .select("status, final_amount, paid_so_far, due_date")
+    .select("id, status, final_amount, due_date")
     .eq("institute_id", instituteId)
     .eq("academic_year", academicYear);
 
@@ -700,10 +707,17 @@ export async function getInstituteRevenueAnalytics(
 
   const { data: payments, error: paymentError } = await supabase
     .from("fee_payments")
-    .select("amount, payment_date")
+    .select("student_fee_id, amount, payment_date")
     .eq("institute_id", instituteId);
 
   if (paymentError) return { data: null, error: paymentError.message, success: false };
+
+  // Map payments by student_fee_id for fast lookup
+  const paymentsByFee = new Map<string, number>();
+  for (const p of payments ?? []) {
+    const current = paymentsByFee.get(p.student_fee_id) ?? 0;
+    paymentsByFee.set(p.student_fee_id, current + p.amount);
+  }
 
   const statusDistribution: InstituteRevenueAnalytics["fee_status_distribution"] = {
     paid: 0,
@@ -720,7 +734,8 @@ export async function getInstituteRevenueAnalytics(
 
   for (const fee of fees ?? []) {
     statusDistribution[fee.status as FeeStatus] += 1;
-    const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+    const paidSoFar = paymentsByFee.get(fee.id) ?? 0;
+    const remaining = Math.max(0, fee.final_amount - paidSoFar);
     if (fee.status === "pending" || fee.status === "partial") totalPending += remaining;
     if (fee.status === "overdue") totalOverdue += remaining;
   }

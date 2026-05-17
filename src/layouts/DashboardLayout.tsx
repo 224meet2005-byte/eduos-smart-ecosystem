@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuthStore } from "@/store/authStore";
 import { signOut } from "@/services/auth.service";
@@ -88,15 +88,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const currentPath = routerState.location.pathname;
 
   const role = user?.role ?? "student";
-  const navItems = getNavItems(role);
+  const navItems = useMemo(() => getNavItems(role), [role]);
 
   const navigate = useNavigate();
 
-  async function handleLogout() {
+  const handleLogout = useCallback(async () => {
     await signOut();
     logout();
     navigate({ to: "/auth/login", replace: true });
-  }
+  }, [logout, navigate]);
 
   return (
     <div className="flex min-h-screen bg-background">

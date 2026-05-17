@@ -36,7 +36,7 @@ export function BatchDetailDrawer({
       setError(null);
 
       if (!batch) return;
-      const result = await getBatchStudents(instituteId, batch.id);
+      const result = await getBatchStudents(batch.id, instituteId);
       if (cancelled) return;
 
       if (result.success && result.data) {

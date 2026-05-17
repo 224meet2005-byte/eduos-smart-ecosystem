@@ -13,6 +13,7 @@ import {
   Sparkles,
   Settings,
   Building2,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -45,7 +46,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Overview",
         items: [
           { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-          { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3, comingSoon: true },
+          { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
         ],
       },
       {
@@ -54,8 +55,8 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "Students", url: "/dashboard/admin/students", icon: GraduationCap },
           { title: "Batches", url: "/dashboard/admin/batches", icon: BookOpen },
           { title: "Parents", url: "/dashboard/admin/parents", icon: Users },
-          { title: "Staff", url: "/dashboard/admin/staff", icon: Users, comingSoon: true },
-          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar, comingSoon: true },
+          { title: "Staff", url: "/dashboard/admin/staff", icon: UserCheck },
+          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
         ],
       },
       {
@@ -81,7 +82,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Overview",
         items: [
           { title: "Dashboard", url: "/dashboard/super-admin", icon: LayoutDashboard },
-          { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3, comingSoon: true },
+          { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
         ],
       },
       {
@@ -100,12 +101,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Overview",
         items: [
           { title: "Dashboard", url: "/dashboard/staff", icon: LayoutDashboard },
-          {
-            title: "Students",
-            url: "/dashboard/staff/students",
-            icon: GraduationCap,
-            comingSoon: true,
-          },
+          { title: "Students", url: "/dashboard/staff/students", icon: GraduationCap },
         ],
       },
     ];

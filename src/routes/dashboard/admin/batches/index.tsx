@@ -34,11 +34,13 @@ import {
   updateBatch,
   archiveBatch,
   restoreBatch,
-  getUnassignedStudents,
+  getStudentsForBatchAssignment,
   bulkAssignStudentsToBatch,
 } from "@/services/batch.service";
+import type { StudentForBatchAssignment } from "@/services/batch.service";
 import { batchSchema, type BatchSchema } from "@/modules/batches/validations";
 import { formatDate } from "@/utils/helpers";
+import { toast } from "sonner";
 import type { Batch, Student } from "@/types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -386,20 +388,52 @@ interface AssignStudentsPanelProps {
 }
 
 function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignStudentsPanelProps) {
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<StudentForBatchAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    getUnassignedStudents(instituteId).then((res) => {
-      if (res.success && res.data) setStudents(res.data);
+    let cancelled = false;
+
+    async function load() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      const res = await getStudentsForBatchAssignment(instituteId);
+      if (cancelled) return;
+
+      if (import.meta.env.DEV) {
+        console.debug("[batches] assign modal students", {
+          instituteId,
+          batchId: batch.id,
+          success: res.success,
+          count: res.data?.length,
+          error: res.error,
+        });
+      }
+
+      if (!res.success || !res.data) {
+        setStudents([]);
+        setLoadError(res.error ?? "Could not load students.");
+      } else {
+        setStudents(res.data);
+        const alreadyInBatch = res.data.filter((s) => s.batch_id === batch.id).map((s) => s.id);
+        setSelected(new Set(alreadyInBatch));
+      }
+
       setIsLoading(false);
-    });
-  }, [instituteId]);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [instituteId, batch.id]);
 
   const filtered = useMemo(() => {
     if (!search) return students;
@@ -434,6 +468,10 @@ function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignS
     setIsSaving(false);
     if (!result.success) {
       setError(result.error ?? "Assignment failed.");
+      return;
+    }
+    if ((result.data?.count ?? 0) === 0 && selected.size > 0) {
+      setError("No students were updated. Check your permissions or try again.");
       return;
     }
     setSuccess(true);
@@ -479,6 +517,14 @@ function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignS
                 onChange={setSearch}
                 placeholder="Search by name, email or admission no…"
               />
+              <p className="text-xs text-muted-foreground">
+                Select students for this batch. You can move students from other batches.
+              </p>
+              {loadError && (
+                <p className="text-xs text-destructive" role="alert">
+                  {loadError}
+                </p>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -489,9 +535,11 @@ function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignS
               ) : filtered.length === 0 ? (
                 <div className="py-10 text-center">
                   <p className="text-sm font-medium text-foreground">
-                    {students.length === 0
-                      ? "All students are assigned to batches."
-                      : "No students match your search."}
+                    {loadError
+                      ? "Unable to load students."
+                      : students.length === 0
+                        ? "No active students in this institute."
+                        : "No students match your search."}
                   </p>
                 </div>
               ) : (
@@ -532,6 +580,13 @@ function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignS
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
                           {s.admission_no} · {s.user?.email}
+                        </p>
+                        <p className="text-xs text-muted-foreground/80 truncate">
+                          {s.batch_id === batch.id
+                            ? "In this batch"
+                            : s.batch?.name
+                              ? `Currently: ${s.batch.name}`
+                              : "Unassigned"}
                         </p>
                       </div>
                     </label>
@@ -623,14 +678,28 @@ function BatchesPage() {
     if (!instituteId) return;
     setIsSubmitting(true);
     setFormError(null);
+
+    if (import.meta.env.DEV) {
+      console.debug("[batches] create payload", { ...values, institute_id: instituteId });
+    }
+
     const result = await createBatch({ ...values, institute_id: instituteId });
     setIsSubmitting(false);
+
+    if (import.meta.env.DEV) {
+      console.debug("[batches] create response", result);
+    }
+
     if (!result.success || !result.data) {
-      setFormError(result.error ?? "Failed to create batch.");
+      const message = result.error ?? "Failed to create batch.";
+      setFormError(message);
+      toast.error(message);
       return;
     }
+
     setBatches((prev) => [{ ...result.data!, student_count: 0 }, ...prev]);
     setShowCreate(false);
+    toast.success("Batch created successfully");
   };
 
   const handleEdit = async (values: BatchSchema) => {
@@ -640,7 +709,9 @@ function BatchesPage() {
     const result = await updateBatch(editingBatch.id, values);
     setIsSubmitting(false);
     if (!result.success || !result.data) {
-      setFormError(result.error ?? "Failed to update batch.");
+      const message = result.error ?? "Failed to update batch.";
+      setFormError(message);
+      toast.error(message);
       return;
     }
     setBatches((prev) =>
@@ -649,6 +720,7 @@ function BatchesPage() {
       ),
     );
     setEditingBatch(null);
+    toast.success("Batch updated");
   };
 
   const handleArchive = async (batch: Batch) => {

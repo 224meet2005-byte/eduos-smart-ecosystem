@@ -19,7 +19,12 @@
 // ---------------------------------------------------------------------------
 
 import { supabase } from "@/lib/supabase";
+import { runService } from "@/lib/service-runner";
 import type { User, Institute, ApiResponse, UserRole } from "@/types";
+import { getErrorMessage } from "@/utils/helpers";
+
+let currentUserInFlight: Promise<ApiResponse<{ user: User; institute: Institute } | null>> | null =
+  null;
 
 // ── Shared "not configured" error response ───────────────────────────────────
 // Returned by every service function when the Supabase client is null.
@@ -40,13 +45,18 @@ const SUPABASE_NOT_CONFIGURED = {
  * Called after a successful Supabase auth operation.
  */
 async function fetchUserProfile(userId: string): Promise<ApiResponse<User>> {
-  // Guard: supabase narrows to SupabaseClient after this return
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase.from("users").select("*").eq("id", userId).single();
+  return runService("fetchUserProfile", async () => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, institute_id, role, name, email, phone, avatar_url, is_active")
+      .eq("id", userId)
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as User, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as User, error: null, success: true };
+  });
 }
 
 /**
@@ -54,17 +64,18 @@ async function fetchUserProfile(userId: string): Promise<ApiResponse<User>> {
  * Called after the user profile is loaded.
  */
 async function fetchInstitute(instituteId: string): Promise<ApiResponse<Institute>> {
-  // Guard: supabase narrows to SupabaseClient after this return
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("institutes")
-    .select("*")
-    .eq("id", instituteId)
-    .single();
+  return runService("fetchInstitute", async () => {
+    const { data, error } = await supabase
+      .from("institutes")
+      .select("id, name, logo, subscription_plan, is_active")
+      .eq("id", instituteId)
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Institute, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Institute, error: null, success: true };
+  });
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -78,7 +89,7 @@ async function fetchInstitute(instituteId: string): Promise<ApiResponse<Institut
 export async function signIn(
   email: string,
   password: string,
-): Promise<ApiResponse<{ user: User; institute: Institute }>> {
+): Promise<ApiResponse<{ user: User; institute: Institute; passwordChangeRequired: boolean }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   // Handle student login ID (e.g. "ocmsarvesh4831") by converting it to virtual email.
@@ -93,6 +104,8 @@ export async function signIn(
   if (authError || !authData.user) {
     return { data: null, error: authError?.message ?? "Sign in failed", success: false };
   }
+
+  const passwordChangeRequired = !!authData.user.user_metadata?.force_password_change;
 
   const profileResult = await fetchUserProfile(authData.user.id);
   if (!profileResult.success || !profileResult.data) {
@@ -113,7 +126,7 @@ export async function signIn(
   }
 
   return {
-    data: { user: profileResult.data, institute: instituteResult.data },
+    data: { user: profileResult.data, institute: instituteResult.data, passwordChangeRequired },
     error: null,
     success: true,
   };
@@ -174,15 +187,18 @@ export async function requestPasswordReset(email: string): Promise<ApiResponse<n
 }
 
 /**
- * Update the authenticated user's password.
- *
- * Must be called while a valid recovery session is active — i.e. after the
- * user has clicked the reset link and landed on `/auth/update-password`.
+ * Update the current user's password.
+ * This is used for both forgotten-password recovery and forced first-login change.
  */
-export async function updatePassword(newPassword: string): Promise<ApiResponse<null>> {
+export async function updatePassword(password: string): Promise<ApiResponse<null>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  // Update password AND clear the force_password_change flag if it exists.
+  const { error } = await supabase.auth.updateUser({
+    password,
+    data: { force_password_change: false },
+  });
+
   if (error) return { data: null, error: error.message, success: false };
   return { data: null, error: null, success: true };
 }
@@ -196,12 +212,15 @@ export async function updatePassword(newPassword: string): Promise<ApiResponse<n
  *   - Supabase is not configured (treated the same as "no session")
  */
 export async function getCurrentSession() {
-  // Not configured → no session. Return null (same as "logged out").
   if (!supabase) return null;
 
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) return null;
-  return data.session;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+    return data.session;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -214,26 +233,34 @@ export async function getCurrentSession() {
 export async function getCurrentUser(): Promise<
   ApiResponse<{ user: User; institute: Institute } | null>
 > {
-  // Not configured → behave identically to "no active session".
-  // AuthProvider calls logout() on this path, which sets isLoading = false.
-  if (!supabase) return { data: null, error: null, success: true };
+  if (currentUserInFlight) return currentUserInFlight;
 
-  const session = await getCurrentSession();
-  if (!session) return { data: null, error: null, success: true };
+  currentUserInFlight = runService("getCurrentUser", async () => {
+    if (!supabase) return { data: null, error: null, success: true };
 
-  const profileResult = await fetchUserProfile(session.user.id);
-  if (!profileResult.success || !profileResult.data) {
-    return { data: null, error: profileResult.error, success: false };
+    const session = await getCurrentSession();
+    if (!session) return { data: null, error: null, success: true };
+
+    const profileResult = await fetchUserProfile(session.user.id);
+    if (!profileResult.success || !profileResult.data) {
+      return { data: null, error: profileResult.error, success: false };
+    }
+
+    const instituteResult = await fetchInstitute(profileResult.data.institute_id);
+    if (!instituteResult.success || !instituteResult.data) {
+      return { data: null, error: instituteResult.error, success: false };
+    }
+
+    return {
+      data: { user: profileResult.data, institute: instituteResult.data },
+      error: null,
+      success: true,
+    };
+  });
+
+  try {
+    return await currentUserInFlight;
+  } finally {
+    currentUserInFlight = null;
   }
-
-  const instituteResult = await fetchInstitute(profileResult.data.institute_id);
-  if (!instituteResult.success || !instituteResult.data) {
-    return { data: null, error: instituteResult.error, success: false };
-  }
-
-  return {
-    data: { user: profileResult.data, institute: instituteResult.data },
-    error: null,
-    success: true,
-  };
 }

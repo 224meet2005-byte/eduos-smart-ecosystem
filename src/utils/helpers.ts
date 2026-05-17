@@ -118,6 +118,45 @@ export function isUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
+/**
+ * Safely extract an error message from a Supabase error or a standard Error object.
+ * Always returns a non-empty string.
+ */
+export function getErrorMessage(err: any, fallback = "An unexpected error occurred."): string {
+  if (!err) return fallback;
+  if (typeof err === "string") return err;
+  
+  // Handle specific "FetchError: undefined" pattern
+  if (err.name === "FetchError" && (!err.message || err.message === "undefined")) {
+    return "Network error: Failed to connect to the server. Please check your internet connection.";
+  }
+
+  if (err.message && typeof err.message === "string") return err.message;
+  if (err.error_description && typeof err.error_description === "string") return err.error_description;
+  
+  // Fallback to stringified error if it has some content
+  const stringified = String(err);
+  if (stringified && stringified !== "[object Object]") return stringified;
+
+  return fallback;
+}
+
+/**
+ * Check if an error is a standard AbortError (caused by AbortController.abort()).
+ */
+export function isAbortError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    // Check for generic signal aborted message from modern browsers
+    const msg = String(err).toLowerCase();
+    return msg.includes("abort") || msg.includes("cancel");
+  }
+  return (
+    err.name === "AbortError" ||
+    err.message.toLowerCase().includes("abort") ||
+    err.message.toLowerCase().includes("cancel")
+  );
+}
+
 // ---------------------------------------------------------------------------
 // URL / Query Strings
 // ---------------------------------------------------------------------------

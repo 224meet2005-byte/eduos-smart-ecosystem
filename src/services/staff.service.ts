@@ -15,8 +15,19 @@
 // Every function returns an ApiResponse<T> — never throws.
 // ---------------------------------------------------------------------------
 
-import { supabase } from "@/lib/supabase";
-import type { Staff, ApiResponse } from "@/types";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { cachedQuery, invalidateQueryCache } from "@/lib/query-cache";
+import { generateStaffCredentials, generateTempPassword } from "@/utils/staffCredentials";
+import { getErrorMessage } from "@/utils/helpers";
+import type {
+  Staff,
+  ApiResponse,
+  AdmitStaffPayload,
+  AdmitStaffResult,
+  StaffAssignment,
+  StaffBatchAssignment,
+  StaffBatchOption,
+} from "@/types";
 
 // ── Shared "not configured" error response ───────────────────────────────────
 // Returned by every service function when the Supabase client is null.
@@ -26,6 +37,22 @@ const SUPABASE_NOT_CONFIGURED = {
   error: "Supabase is not configured.",
   success: false,
 } as const;
+
+const STAFF_BATCH_CACHE_PREFIX = "staff-batches:";
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return UUID_V4_RE.test(value);
+}
+
+function cacheKeyForStaffBatchAssignments(staffId: string): string {
+  return `${STAFF_BATCH_CACHE_PREFIX}${staffId}`;
+}
+
+export function invalidateStaffBatchAssignmentsCache(staffId?: string): void {
+  invalidateQueryCache(staffId ? cacheKeyForStaffBatchAssignments(staffId) : STAFF_BATCH_CACHE_PREFIX);
+}
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +65,7 @@ export async function getStaffByInstitute(instituteId: string): Promise<ApiRespo
 
   const { data, error } = await supabase
     .from("staff")
-    .select("*, user:users(*)")
+    .select("id, institute_id, user_id, designation, department, qualification, joining_date, is_active, created_at, updated_at, user:users(id, name, email, avatar_url)")
     .eq("institute_id", instituteId)
     .order("created_at", { ascending: false });
 
@@ -61,6 +88,311 @@ export async function getStaffByUserId(userId: string): Promise<ApiResponse<Staf
 
   if (error) return { data: null, error: error.message, success: false };
   return { data: data as Staff, error: null, success: true };
+}
+
+/**
+ * Admit a new staff member.
+ * Creates auth user via Admin API, then creates profile via RPC.
+ * Now includes protection against duplicate emails and multi-tenant isolation.
+ */
+export async function admitStaff(
+  payload: AdmitStaffPayload,
+): Promise<ApiResponse<AdmitStaffResult>> {
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
+
+  // ── Step 0: Pre-check if email already exists in the system ──────────────
+  const { data: existingUser, error: checkError } = await supabase
+    .from("users")
+    .select("id, institute_id, role")
+    .eq("email", payload.email)
+    .maybeSingle();
+
+  if (checkError) {
+    console.error("[admitStaff] Pre-check failed:", checkError.message);
+  }
+
+  let userId: string | null = null;
+  let isExistingUser = false;
+
+  if (existingUser) {
+    // Check if the user belongs to the same institute
+    if (existingUser.institute_id !== payload.institute_id) {
+      return {
+        data: null,
+        error: "This email is already registered with another institute. Please use a unique email address.",
+        success: false,
+      };
+    }
+
+    // Check if they are already staff in this institute
+    const { data: existingStaff } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("user_id", existingUser.id)
+      .maybeSingle();
+
+    if (existingStaff) {
+      return {
+        data: null,
+        error: "This person is already admitted as a staff member in your institute.",
+        success: false,
+      };
+    }
+
+    // Reuse existing user ID
+    userId = existingUser.id;
+    isExistingUser = true;
+  }
+
+  // ── Step 1: Generate temporary password ──────────────────────────────────
+  const { temporaryPassword } = generateStaffCredentials(payload.name);
+
+  // ── Step 2: Create Auth User (only if they don't exist yet) ──────────────
+  if (!isExistingUser) {
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: payload.email,
+      password: temporaryPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: payload.name,
+        role: "staff",
+        institute_id: payload.institute_id,
+        force_password_change: true,
+      },
+    });
+
+    if (authError || !authData.user) {
+      return {
+        data: null,
+        error: authError?.message ?? "Failed to create staff auth account.",
+        success: false,
+      };
+    }
+    userId = authData.user.id;
+  }
+
+  // ── Step 3: Create Profile via RPC ───────────────────────────────────────
+  const { data: rpcData, error: rpcError } = await supabase.rpc("create_staff_profile", {
+    p_user_id: userId,
+    p_institute_id: payload.institute_id,
+    p_name: payload.name,
+    p_email: payload.email,
+    p_phone: payload.phone,
+    p_designation: payload.designation,
+    p_department: payload.department,
+    p_qualification: payload.qualification,
+    p_joining_date: payload.joining_date,
+    p_role_name: payload.role_name,
+  });
+
+  if (rpcError) {
+    console.error("[admitStaff] Profile creation failed:", rpcError.message);
+    return { data: null, error: rpcError.message, success: false };
+  }
+
+  const result = rpcData as { staff_id: string };
+
+  // ── Step 4: Handle Assignments ───────────────────────────────────────────
+  if (payload.assignments && payload.assignments.length > 0) {
+    const assignmentRows = payload.assignments.map((a) => ({
+      institute_id: payload.institute_id,
+      staff_id: result.staff_id,
+      batch_id: a.batch_id,
+      course_name: a.course_name,
+      subject_name: a.subject_name,
+    }));
+
+    await supabase.from("staff_assignments").insert(assignmentRows);
+  }
+
+  return {
+    data: {
+      staff_id: result.staff_id,
+      user_id: userId!,
+      email: payload.email,
+      temporary_password: isExistingUser ? "REUSED_EXISTING_ACCOUNT" : temporaryPassword,
+      name: payload.name,
+      role_name: payload.role_name,
+      assignments: payload.assignments,
+    },
+    error: null,
+    success: true,
+  };
+}
+
+/**
+ * Return all assignments for a staff member.
+ */
+export async function getStaffAssignments(staffId: string): Promise<ApiResponse<StaffAssignment[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase
+    .from("staff_assignments")
+    .select("*, batch:batches(*)")
+    .eq("staff_id", staffId);
+
+  if (error) return { data: null, error: error.message, success: false };
+  return { data: data as StaffAssignment[], error: null, success: true };
+}
+
+/**
+ * Return explicit batch-only assignments for a staff member.
+ * Batch-only rows are modeled as staff_assignments with NULL course + subject.
+ */
+export async function getStaffBatchAssignments(
+  staffId: string,
+): Promise<ApiResponse<StaffBatchAssignment[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(staffId)) {
+    return { data: null, error: "Invalid staff id.", success: false };
+  }
+
+  const cacheKey = cacheKeyForStaffBatchAssignments(staffId);
+
+  try {
+    const data = await cachedQuery(cacheKey, 30_000, async () => {
+      const { data: rows, error } = await supabase
+        .from("staff_assignments")
+        .select(
+          "id, institute_id, staff_id, batch_id, assigned_at, assigned_by, batch:batches(id, institute_id, name, academic_year, batch_code, course_name, start_date, end_date, capacity, is_active, status, archived_at, created_at, updated_at)",
+        )
+        .eq("staff_id", staffId)
+        .not("batch_id", "is", null)
+        .is("course_name", null)
+        .is("subject_name", null)
+        .order("assigned_at", { ascending: false });
+
+      if (error) throw error;
+      return (rows ?? []) as StaffBatchAssignment[];
+    });
+
+    return { data, error: null, success: true };
+  } catch (err) {
+    return { data: null, error: getErrorMessage(err), success: false };
+  }
+}
+
+/**
+ * Return active batches that can be assigned to staff.
+ */
+export async function getAssignableBatchOptions(
+  instituteId: string,
+): Promise<ApiResponse<StaffBatchOption[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(instituteId)) {
+    return { data: null, error: "Invalid institute id.", success: false };
+  }
+
+  const { data, error } = await supabase
+    .from("batches")
+    .select("id, name, academic_year, course_name, is_active, status")
+    .eq("institute_id", instituteId)
+    .eq("is_active", true)
+    .or("status.eq.active,status.is.null")
+    .order("name", { ascending: true });
+
+  if (error) return { data: null, error: error.message, success: false };
+
+  const options = (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    academic_year: row.academic_year,
+    course_name: row.course_name,
+    label: row.course_name
+      ? `${row.name} (${row.academic_year}) • ${row.course_name}`
+      : `${row.name} (${row.academic_year})`,
+  })) as StaffBatchOption[];
+
+  return { data: options, error: null, success: true };
+}
+
+/**
+ * Add a new explicit batch assignment row for a staff member.
+ */
+export async function assignBatchToStaff(payload: {
+  institute_id: string;
+  staff_id: string;
+  batch_id: string;
+  assigned_by?: string | null;
+}): Promise<ApiResponse<StaffBatchAssignment>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(payload.institute_id) || !isValidUuid(payload.staff_id) || !isValidUuid(payload.batch_id)) {
+    return { data: null, error: "Invalid assignment payload.", success: false };
+  }
+
+  const { data: activeBatch, error: batchError } = await supabase
+    .from("batches")
+    .select("id")
+    .eq("id", payload.batch_id)
+    .eq("institute_id", payload.institute_id)
+    .eq("is_active", true)
+    .or("status.eq.active,status.is.null")
+    .maybeSingle();
+
+  if (batchError) return { data: null, error: batchError.message, success: false };
+  if (!activeBatch) {
+    return {
+      data: null,
+      error: "Selected batch is invalid, inactive, or does not belong to this institute.",
+      success: false,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("staff_assignments")
+    .insert({
+      institute_id: payload.institute_id,
+      staff_id: payload.staff_id,
+      batch_id: payload.batch_id,
+      course_name: null,
+      subject_name: null,
+      assigned_by: payload.assigned_by ?? null,
+    })
+    .select(
+      "id, institute_id, staff_id, batch_id, assigned_at, assigned_by, batch:batches(id, institute_id, name, academic_year, batch_code, course_name, start_date, end_date, capacity, is_active, status, archived_at, created_at, updated_at)",
+    )
+    .single();
+
+  if (error) {
+    const message = getErrorMessage(error);
+    if (/duplicate key|unique/i.test(message)) {
+      return { data: null, error: "Batch already assigned to this staff member.", success: false };
+    }
+    return { data: null, error: message, success: false };
+  }
+
+  invalidateStaffBatchAssignmentsCache(payload.staff_id);
+  return { data: data as StaffBatchAssignment, error: null, success: true };
+}
+
+/**
+ * Remove a batch-only assignment row.
+ */
+export async function removeStaffBatchAssignment(payload: {
+  assignment_id: string;
+  staff_id: string;
+}): Promise<ApiResponse<null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(payload.assignment_id) || !isValidUuid(payload.staff_id)) {
+    return { data: null, error: "Invalid assignment id.", success: false };
+  }
+
+  const { error } = await supabase
+    .from("staff_assignments")
+    .delete()
+    .eq("id", payload.assignment_id)
+    .eq("staff_id", payload.staff_id)
+    .is("course_name", null)
+    .is("subject_name", null);
+
+  if (error) return { data: null, error: error.message, success: false };
+
+  invalidateStaffBatchAssignmentsCache(payload.staff_id);
+  return { data: null, error: null, success: true };
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -120,4 +452,29 @@ export async function removeStaff(id: string): Promise<ApiResponse<null>> {
 
   if (error) return { data: null, error: error.message, success: false };
   return { data: null, error: null, success: true };
+}
+
+/**
+ * Reset a staff member's password to a new auto-generated temporary password.
+ */
+export async function resetStaffPassword(
+  userId: string,
+): Promise<ApiResponse<{ temporary_password: string }>> {
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
+
+  const newPassword = generateTempPassword();
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (error) {
+    return { data: null, error: error.message, success: false };
+  }
+
+  return {
+    data: { temporary_password: newPassword },
+    error: null,
+    success: true,
+  };
 }

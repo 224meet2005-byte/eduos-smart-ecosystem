@@ -32,8 +32,9 @@ import type { StudentFee, RecordPaymentResult } from "@/types";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Format a number as Indian rupees: ₹1,00,000 */
-function inr(amount: number) {
-  return `₹${amount.toLocaleString("en-IN")}`;
+function inr(amount?: number | null) {
+  const n = Number(amount ?? 0) || 0;
+  return `₹${n.toLocaleString("en-IN")}`;
 }
 
 /** Return today's date as YYYY-MM-DD for the date input's default value. */
@@ -79,7 +80,9 @@ export function RecordPaymentModal({
   const [serverError, setServerError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<RecordPaymentResult | null>(null);
 
-  const remainingDue = Math.max(0, studentFee.final_amount - studentFee.paid_so_far);
+  const finalAmt = Number(studentFee.final_amount ?? 0);
+  const paidSoFar = Number(studentFee.paid_so_far ?? 0);
+  const remainingDue = Math.max(0, finalAmt - paidSoFar);
   const feeName = studentFee.fee_structure?.fee_name ?? studentFee.fee_structure?.name ?? "Fee";
 
   const {
@@ -199,7 +202,7 @@ export function RecordPaymentModal({
                   Remaining due:{" "}
                   <span
                     className={
-                      receipt.remaining_amount > 0
+                      Number(receipt.remaining_amount ?? 0) > 0
                         ? "font-medium text-destructive"
                         : "font-medium text-green-600 dark:text-green-400"
                     }

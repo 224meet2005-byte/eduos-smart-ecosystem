@@ -132,11 +132,86 @@ export interface Staff {
   user_id: string;
   designation: string;
   department: string | null;
+  phone?: string | null;
+  qualification?: string | null;
+  joining_date?: string;
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
 
   // Joined relations
   user?: User;
+  assignments?: StaffAssignment[];
+}
+
+export interface StaffRole {
+  id: string;
+  institute_id: string;
+  role_name: string;
+  permissions: string[];
+  created_at: string;
+}
+
+export interface StaffAssignment {
+  id: string;
+  institute_id: string;
+  staff_id: string;
+  batch_id: string | null;
+  course_name: string | null;
+  subject_name: string | null;
+  created_at: string;
+  
+  // Joined
+  batch?: Batch;
+}
+
+export interface StaffBatchAssignment {
+  id: string;
+  institute_id: string;
+  staff_id: string;
+  batch_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  batch?: Batch;
+}
+
+export interface StaffBatchOption {
+  id: string;
+  name: string;
+  academic_year: string;
+  course_name: string | null;
+  label: string;
+}
+
+export interface AdmitStaffPayload {
+  institute_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  designation: string;
+  department: string;
+  qualification: string;
+  joining_date: string;
+  role_name: string;
+  assignments?: {
+    batch_id?: string;
+    course_name?: string;
+    subject_name?: string;
+  }[];
+}
+
+export interface AdmitStaffResult {
+  staff_id: string;
+  user_id: string;
+  email: string;
+  temporary_password: string;
+  name: string;
+  role_name: string;
+  assignments?: {
+    batch_id?: string;
+    course_name?: string;
+    subject_name?: string;
+  }[];
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
@@ -198,6 +273,8 @@ export interface Batch {
   end_date: string | null;
   capacity: number | null;
   is_active: boolean;
+  status?: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   // Computed
@@ -374,7 +451,17 @@ export interface StudentAdmissionCredentials {
   temporary_password: string;
 }
 
-export interface AdmitStudentResult extends StudentAdmissionCredentials {}
+export type ParentAccountStatus = "not_provided" | "existing_linked" | "created";
+export type ParentEmailDeliveryStatus = "not_applicable" | "sent" | "failed";
+
+export interface AdmitStudentResult extends StudentAdmissionCredentials {
+  parent_account_status: ParentAccountStatus;
+  parent_email_delivery_status: ParentEmailDeliveryStatus;
+  parent_email: string | null;
+  parent_temporary_password: string | null;
+  parent_user_id: string | null;
+  parent_first_login_change_required: boolean;
+}
 
 // ── Lifecycle Management ─────────────────────────────────────────────────────
 
@@ -493,6 +580,7 @@ export interface AttendanceRecord {
   session_id: string;
   student_id: string;
   institute_id: string;
+  batch_id?: string | null;
   status: AttendanceStatus;
   notes: string | null;
   marked_by: string;
@@ -548,6 +636,35 @@ export interface StudentDashboardData {
   batch: StudentBatchInfo | null;
   stats: StudentAttendanceStats;
   history: StudentAttendanceRecord[];
+}
+
+export interface ParentPortalChildSnapshot {
+  student: Student;
+  batch: StudentBatchInfo | null;
+  stats: StudentAttendanceStats;
+  history: StudentAttendanceRecord[];
+  fees: StudentFee[];
+  student_history: StudentHistory[];
+  documents: StudentDocument[];
+  courses: StudentCourse[];
+  generated_at: string;
+}
+
+export interface ParentPortalChildSummary {
+  student: Student;
+  batch: StudentBatchInfo | null;
+  attendance_percentage: number;
+  total_sessions: number;
+  pending_fees: number;
+  courses_count: number;
+  documents_count: number;
+  remark_count: number;
+  next_due_date: string | null;
+}
+
+export interface ParentPortalBootstrap {
+  parent: Parent;
+  children: Student[];
 }
 
 export interface AttendanceSummary {
@@ -772,4 +889,328 @@ export interface SecurityEvent {
   user_agent: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+// ── Schedule / Timetable ──────────────────────────────────────────────────────
+
+export type ScheduleType = "regular" | "exam" | "break" | "lunch" | "event";
+export type ScheduleStatus = "draft" | "published" | "archived";
+export type ScheduleExceptionType = "holiday" | "cancelled" | "rescheduled" | "event";
+
+export interface Subject {
+  id: string;
+  institute_id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Section {
+  id: string;
+  institute_id: string;
+  batch_id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  batch?: Batch;
+}
+
+export interface Room {
+  id: string;
+  institute_id: string;
+  room_name: string;
+  capacity: number | null;
+  building: string | null;
+  floor: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Schedule {
+  id: string;
+  institute_id: string;
+  batch_id: string;
+  section_id: string | null;
+  subject_id: string | null;
+  teacher_id: string | null;
+  room_id: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  type: ScheduleType;
+  status: ScheduleStatus;
+  title: string | null;
+  notes: string | null;
+  week_label: string | null;
+  created_at: string;
+  updated_at: string;
+  batch?: Batch;
+  section?: Section;
+  subject?: Subject;
+  teacher?: Staff;
+  room?: Room;
+}
+
+export interface ScheduleException {
+  id: string;
+  institute_id: string;
+  batch_id: string | null;
+  schedule_id: string | null;
+  exception_date: string;
+  type: ScheduleExceptionType;
+  title: string;
+  description: string | null;
+  replacement_start: string | null;
+  replacement_end: string | null;
+  is_all_day: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleConflict {
+  type: "teacher" | "room" | "batch" | "invalid_time";
+  schedule_id?: string;
+  message: string;
+}
+
+export interface CreateSchedulePayload {
+  institute_id: string;
+  batch_id: string;
+  section_id?: string | null;
+  subject_id?: string | null;
+  teacher_id?: string | null;
+  room_id?: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  type?: ScheduleType;
+  status?: ScheduleStatus;
+  title?: string | null;
+  notes?: string | null;
+  week_label?: string | null;
+}
+
+export interface UpdateSchedulePayload {
+  batch_id?: string;
+  section_id?: string | null;
+  subject_id?: string | null;
+  teacher_id?: string | null;
+  room_id?: string | null;
+  day_of_week?: number;
+  start_time?: string;
+  end_time?: string;
+  type?: ScheduleType;
+  status?: ScheduleStatus;
+  title?: string | null;
+  notes?: string | null;
+  week_label?: string | null;
+}
+
+export interface ScheduleFilters {
+  batchId?: string;
+  sectionId?: string;
+  teacherId?: string;
+  subjectId?: string;
+  roomId?: string;
+  dayOfWeek?: number;
+  status?: ScheduleStatus;
+  type?: ScheduleType;
+  search?: string;
+}
+
+export interface CreateSubjectPayload {
+  institute_id: string;
+  name: string;
+  code?: string;
+  description?: string;
+}
+
+export interface CreateRoomPayload {
+  institute_id: string;
+  room_name: string;
+  capacity?: number;
+  building?: string;
+  floor?: string;
+}
+
+export interface CreateSectionPayload {
+  institute_id: string;
+  batch_id: string;
+  name: string;
+}
+
+export interface CreateScheduleExceptionPayload {
+  institute_id: string;
+  batch_id?: string | null;
+  schedule_id?: string | null;
+  exception_date: string;
+  type: ScheduleExceptionType;
+  title: string;
+  description?: string;
+  replacement_start?: string;
+  replacement_end?: string;
+  is_all_day?: boolean;
+}
+
+// ── Analytics & Reporting ─────────────────────────────────────────────────────
+
+export interface AnalyticsFilters {
+  instituteId: string;
+  batchId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface AnalyticsCountBlock {
+  total: number;
+  active?: number;
+}
+
+export interface InstituteAnalyticsOverview {
+  students: AnalyticsCountBlock;
+  staff: AnalyticsCountBlock & { assignments?: number };
+  parents: AnalyticsCountBlock;
+  batches: AnalyticsCountBlock;
+  attendance: {
+    total_records: number;
+    present_or_late: number;
+    rate: number;
+  };
+  fees: {
+    collected_in_range: number;
+    pending: number;
+    overdue: number;
+  };
+  schedules: {
+    published: number;
+    draft: number;
+    exam_slots: number;
+  };
+  courses: { enrollments_active: number };
+}
+
+export interface AnalyticsTrendPoint {
+  date?: string;
+  period?: string;
+  label: string;
+  present?: number;
+  absent?: number;
+  late?: number;
+  leave?: number;
+  total?: number;
+  percentage?: number;
+  amount?: number;
+  month?: string;
+}
+
+export interface BatchAttendanceAnalytics {
+  batch_id: string;
+  batch_name: string;
+  total: number;
+  present: number;
+  rate: number;
+}
+
+export interface InstituteAttendanceAnalytics {
+  daily_trend: AnalyticsTrendPoint[];
+  batch_breakdown: BatchAttendanceAnalytics[];
+  status_distribution: Record<string, number>;
+}
+
+export interface InstituteFeeAnalytics {
+  status_distribution: Record<string, number>;
+  monthly_revenue: AnalyticsTrendPoint[];
+  totals: {
+    collected: number;
+    pending: number;
+    overdue: number;
+  };
+}
+
+export interface TeacherWorkloadRow {
+  staff_id: string;
+  name: string;
+  slots: number;
+}
+
+export interface InstituteScheduleAnalytics {
+  by_type: Record<string, number>;
+  teacher_workload: TeacherWorkloadRow[];
+}
+
+export interface StudentCourseAnalyticsRow {
+  course_name: string;
+  status: string;
+  enrolled_at: string;
+}
+
+export interface StudentAnalyticsBundle {
+  student_id: string;
+  attendance: {
+    total: number;
+    present_or_late: number;
+    rate: number;
+    weekly_trend: AnalyticsTrendPoint[];
+  };
+  courses: StudentCourseAnalyticsRow[];
+  fees: {
+    total_due: number;
+    total_paid: number;
+    pending_count: number;
+  };
+  insights: string[];
+}
+
+export interface InstituteAnalyticsBundle {
+  overview: InstituteAnalyticsOverview;
+  attendance: InstituteAttendanceAnalytics;
+  fees: InstituteFeeAnalytics;
+  schedule: InstituteScheduleAnalytics;
+}
+
+// ── Teacher students (staff portal) ───────────────────────────────────────────
+
+export type TeacherStudentPerformanceStatus =
+  | "excellent"
+  | "good"
+  | "needs_attention"
+  | "unknown";
+
+export interface TeacherStudentListItem {
+  id: string;
+  admission_no: string;
+  status: StudentStatus;
+  batch_id: string | null;
+  batch_name: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  attendance_rate: number;
+  performance_status: TeacherStudentPerformanceStatus;
+  emergency_contact?: EmergencyContact | null;
+  created_at: string;
+}
+
+export interface TeacherStudentsFilters {
+  search?: string;
+  batchId?: string | null;
+  status?: StudentStatus | null;
+  attendanceBand?: "all" | "high" | "medium" | "low";
+  performance?: TeacherStudentPerformanceStatus | "all";
+}
+
+export interface TeacherStudentsListResponse {
+  items: TeacherStudentListItem[];
+  meta: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
 }

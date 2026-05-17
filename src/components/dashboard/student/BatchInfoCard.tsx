@@ -72,7 +72,7 @@ export function BatchInfoCard({ batch }: BatchInfoCardProps) {
                 Timing
               </div>
               <p className="mt-2 text-sm text-foreground">
-                {"Schedule details not configured for this batch."}
+                View your weekly class timetable in the section below.
               </p>
             </div>
           </>

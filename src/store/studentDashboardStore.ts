@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import type { StudentDashboardData } from "@/types";
+import type { ParentPortalChildSnapshot, StudentDashboardData } from "@/types";
 
 export interface StudentDashboardState {
   dashboard: StudentDashboardData | null;
@@ -8,10 +8,14 @@ export interface StudentDashboardState {
   isLoading: boolean;
   error: string | null;
   lastUpdated: string | null;
+  parentChildren: Record<string, ParentPortalChildSnapshot>;
+  parentSelectedChildId: string | null;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   setDashboard: (studentId: string, dashboard: StudentDashboardData) => void;
   resetDashboard: () => void;
+  setParentChildSnapshot: (childId: string, snapshot: ParentPortalChildSnapshot | null) => void;
+  setParentSelectedChildId: (childId: string | null) => void;
 }
 
 export const useStudentDashboardStore = create<StudentDashboardState>()(
@@ -23,6 +27,8 @@ export const useStudentDashboardStore = create<StudentDashboardState>()(
         isLoading: true,
         error: null,
         lastUpdated: null,
+        parentChildren: {},
+        parentSelectedChildId: null,
         setLoading: (isLoading) => set({ isLoading }, false, "studentDashboard/setLoading"),
         setError: (error) => set({ error }, false, "studentDashboard/setError"),
         setDashboard: (studentId, dashboard) =>
@@ -49,6 +55,14 @@ export const useStudentDashboardStore = create<StudentDashboardState>()(
             false,
             "studentDashboard/resetDashboard",
           ),
+        setParentChildSnapshot: (childId, snapshot) =>
+          set((state) => ({
+            parentChildren: snapshot
+              ? { ...state.parentChildren, [childId]: snapshot }
+              : Object.fromEntries(Object.entries(state.parentChildren).filter(([id]) => id !== childId)),
+            parentSelectedChildId: state.parentSelectedChildId ?? childId,
+          })),
+        setParentSelectedChildId: (childId) => set({ parentSelectedChildId: childId }),
       }),
       {
         name: "eduos-student-dashboard",
@@ -56,6 +70,8 @@ export const useStudentDashboardStore = create<StudentDashboardState>()(
           dashboard: state.dashboard,
           studentId: state.studentId,
           lastUpdated: state.lastUpdated,
+          parentChildren: state.parentChildren,
+          parentSelectedChildId: state.parentSelectedChildId,
         }),
       },
     ),

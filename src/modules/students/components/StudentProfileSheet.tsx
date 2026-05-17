@@ -32,6 +32,7 @@ import {
   Check,
   RefreshCw,
   ReceiptText,
+  Eye,
 } from "lucide-react";
 
 import type { Student, StudentParent } from "@/types";
@@ -111,6 +112,8 @@ export function StudentProfileSheet({
   const [newPassword, setNewPassword] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [isGeneratingFromView, setIsGeneratingFromView] = useState(false);
 
   // Fetch linked parents whenever the sheet opens for a new student.
   const fetchParents = useCallback(async (studentId: string) => {
@@ -128,29 +131,82 @@ export function StudentProfileSheet({
     if (isOpen && student?.id) {
       fetchParents(student.id);
       setNewPassword(null);
+      setIsViewing(false);
     } else {
       setParents([]);
       setNewPassword(null);
+      setIsViewing(false);
     }
   }, [isOpen, student?.id, fetchParents]);
 
   async function handleResetPassword() {
     if (!student?.user_id) return;
-
     const confirmed = window.confirm(
-      "Are you sure you want to reset this student's password? The current password will stop working immediately.",
+      "Confirm password reset — this will immediately invalidate the existing password.",
     );
     if (!confirmed) return;
 
-    setIsResetting(true);
-    const result = await resetStudentPassword(student.user_id);
-    setIsResetting(false);
+    try {
+      setIsResetting(true);
+      console.log("[StudentProfileSheet] Resetting password for user:", student.user_id);
+      const result = await resetStudentPassword(student.user_id);
+      setIsResetting(false);
 
-    if (result.success && result.data) {
-      setNewPassword(result.data.temporary_password);
-      toast.success("Password reset successfully");
-    } else {
-      toast.error(result.error ?? "Failed to reset password");
+      if (result.success && result.data) {
+        console.log("[StudentProfileSheet] Reset success, new password:", result.data.temporary_password);
+        setNewPassword(result.data.temporary_password);
+        setIsViewing(true);
+        toast.success("Password reset successfully");
+      } else {
+        console.error("[StudentProfileSheet] Reset failed:", result.error);
+        toast.error(result.error ?? "Failed to reset password");
+      }
+    } catch (err) {
+      console.error("[StudentProfileSheet] Reset exception:", err);
+      setIsResetting(false);
+      toast.error((err as Error).message ?? "Failed to reset password");
+    }
+  }
+
+  /**
+   * View password handler. If we already have a freshly generated temporary
+   * password in state show it. Otherwise offer to generate a new temporary
+   * password (safer than exposing any real stored secret).
+   */
+  async function handleViewPassword() {
+    if (!student?.user_id) return;
+
+    // If we have a recently generated password in memory, show it.
+    if (newPassword) {
+      setIsViewing(true);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "No temporary password is currently available to view. Generate a new temporary password now?",
+    );
+    if (!confirmed) return;
+
+    // Generate a new temp password (uses same RPC as reset) but mark it as
+    // originating from a view action so the UI can reflect that intent.
+    try {
+      setIsGeneratingFromView(true);
+      console.log("[StudentProfileSheet] Generating password for user:", student.user_id);
+      const result = await resetStudentPassword(student.user_id);
+      setIsGeneratingFromView(false);
+      if (result.success && result.data) {
+        console.log("[StudentProfileSheet] Generation success, new password:", result.data.temporary_password);
+        setNewPassword(result.data.temporary_password);
+        setIsViewing(true);
+        toast.success("Temporary password generated");
+      } else {
+        console.error("[StudentProfileSheet] Generation failed:", result.error);
+        toast.error(result.error ?? "Failed to generate temporary password");
+      }
+    } catch (err) {
+      console.error("[StudentProfileSheet] Generation exception:", err);
+      setIsGeneratingFromView(false);
+      toast.error((err as Error).message ?? "Failed to generate temporary password");
     }
   }
 
@@ -163,38 +219,15 @@ export function StudentProfileSheet({
     }
   }
 
-  // Trap focus inside sheet and close on Escape key.
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [isOpen, onClose]);
+  if (!student) {
+    return null;
+  }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  if (!student) return null;
-
-  const ec = student.emergency_contact;
+  const ec = student.emergency_contact ?? null;
 
   return (
     <>
-      {/* ── Backdrop ──────────────────────────────────────────────────────── */}
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ${
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
-      />
-
-      {/* ── Slide-in panel ────────────────────────────────────────────────── */}
       <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Profile: ${student.user?.name ?? "Student"}`}
         className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-card border-l border-border shadow-xl transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
@@ -256,46 +289,67 @@ export function StudentProfileSheet({
               </p>
             </div>
 
-            {newPassword ? (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Key className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-medium text-primary uppercase">New Temporary Password</span>
-                  </div>
-                  <button
-                    onClick={handleCopyPassword}
-                    className="p-1 hover:bg-primary/10 rounded transition-colors"
-                    title="Copy password"
-                  >
-                    {copied ? (
-                      <Check className="h-3.5 w-3.5 text-green-600" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5 text-primary" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-sm font-mono font-bold text-foreground bg-background border border-primary/20 rounded px-2 py-1.5 flex items-center justify-between">
-                  {newPassword}
-                </p>
-                <p className="mt-2 text-[10px] text-primary/70 leading-tight">
-                  Share this password with the student. It will not be shown again once you close this panel.
-                </p>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => {
+                    console.log("[StudentProfileSheet] View Password clicked");
+                    handleViewPassword();
+                  }}
+                  disabled={isViewing || isGeneratingFromView}
+                  title="View Temporary Password (generate if none)"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+                >
+                  {isGeneratingFromView ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  View Password
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    console.log("[StudentProfileSheet] Reset Password clicked");
+                    handleResetPassword();
+                  }}
+                  disabled={isResetting}
+                  title="Reset student's password (requires confirmation)"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Reset Password
+                </button>
               </div>
-            ) : (
-              <button
-                onClick={handleResetPassword}
-                disabled={isResetting}
-                className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-              >
-                {isResetting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                {isResetting ? "Resetting..." : "Reset Password & View"}
-              </button>
-            )}
+
+              {newPassword && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium text-primary uppercase">Temporary Password</span>
+                    </div>
+                    <button
+                      onClick={handleCopyPassword}
+                      className="p-1 hover:bg-primary/10 rounded transition-colors"
+                      title="Copy password"
+                    >
+                      {copied ? (
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5 text-primary" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-sm font-mono font-bold text-foreground bg-background border border-primary/20 rounded px-2 py-1.5 flex items-center justify-between">
+                    {newPassword}
+                  </p>
+                  <p className="mt-2 text-[10px] text-primary/70 leading-tight">
+                    Share this password with the student. It will not be shown again once you close this panel.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Aadhaar removed from profile display */}

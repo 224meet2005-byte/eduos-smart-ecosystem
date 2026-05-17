@@ -23,6 +23,9 @@ export * from "./institute.service";
 export * from "./parent.service";
 export * from "./security.service";
 export * from "./staff.service";
+export * from "./schedule.service";
+export * from "./analytics.service";
+export * from "./teacherStudents.service";
 // student.service re-exports getBatchesByInstitute from batch.service.
 // Export only the unique symbols from student.service to avoid collision.
 export {

@@ -28,7 +28,10 @@ import { z } from "zod";
  *  - `notes`        — Optional admin notes on the session itself.
  */
 export const createSessionSchema = z.object({
-  batch_id: z.string().uuid("Select a valid batch").nullable(),
+  batch_id: z
+    .string({ required_error: "Select a batch" })
+    .min(1, "Select a batch")
+    .uuid("Select a valid batch"),
   session_date: z.string().min(1, "Session date is required"),
   session_type: z.enum(["daily", "lecture"]),
   topic: z.string().max(200).optional(),

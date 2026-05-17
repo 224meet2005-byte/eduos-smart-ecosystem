@@ -24,6 +24,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { searchStudents, updateStudent } from "@/services/student.service";
 import { useAuthStore } from "@/store/authStore";
+import { isAbortError } from "@/utils/helpers";
 import type { Student, StudentStatus, StudentFilters, PaginationMeta } from "@/types";
 
 export interface UseStudentsOptions {
@@ -59,6 +60,9 @@ export function useStudents({ instituteId, autoFetch = true }: UseStudentsOption
   const [filters, setFiltersState] = useState<StudentFilters>({});
   const filtersRef = useRef<StudentFilters>({});
 
+  // Debounce search requests to avoid hammering Supabase on every keystroke.
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Abort controller ref — cancelled when component unmounts or instituteId changes.
   const abortRef = useRef<AbortController | null>(null);
   // Safety timeout ref — forces loading off if the query stalls.
@@ -70,13 +74,19 @@ export function useStudents({ instituteId, autoFetch = true }: UseStudentsOption
   }, []);
 
   // ── Clear safety timers ────────────────────────────────────────────────────
-  const clearTimers = useCallback(() => {
+  const clearTimers = useCallback((reason: string = "Request cancelled") => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    abortRef.current?.abort();
-    abortRef.current = null;
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    if (abortRef.current) {
+      abortRef.current.abort(reason);
+      abortRef.current = null;
+    }
   }, []);
 
   // ── Core fetch ─────────────────────────────────────────────────────────────
@@ -111,7 +121,16 @@ export function useStudents({ instituteId, autoFetch = true }: UseStudentsOption
       }, FETCH_TIMEOUT_MS);
 
       try {
-        const result = await searchStudents(instituteId, filtersRef.current, page, 20);
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        const result = await searchStudents(
+          instituteId,
+          filtersRef.current,
+          page,
+          20,
+          controller.signal,
+        );
 
         // Clear the timeout since the request completed normally
         clearTimers();
@@ -121,12 +140,16 @@ export function useStudents({ instituteId, autoFetch = true }: UseStudentsOption
           setPagination(result.data.meta);
           setCurrentPage(result.data.meta.page);
         } else {
+          if (result.error === "Aborted") return;
+
           console.error("[useStudents] searchStudents failed:", result.error);
           setError(result.error ?? "Failed to load students. Please try again.");
           setStudents([]);
         }
       } catch (err) {
-        clearTimers();
+        clearTimers("Error caught in useStudents");
+        if (isAbortError(err)) return;
+
         const message = err instanceof Error ? err.message : "Unexpected error loading students";
         console.error("[useStudents] unexpected error:", message);
         setError(message);
@@ -159,7 +182,14 @@ export function useStudents({ instituteId, autoFetch = true }: UseStudentsOption
   const setSearch = useCallback(
     (query: string) => {
       setFilters({ ...filtersRef.current, search: query || undefined });
-      fetchStudents(1);
+
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+
+      searchDebounceRef.current = setTimeout(() => {
+        fetchStudents(1);
+      }, 250);
     },
     [fetchStudents, setFilters],
   );

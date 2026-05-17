@@ -4,9 +4,11 @@
 // ---------------------------------------------------------------------------
 
 import { supabase } from "@/lib/supabase";
+import { isAbortError, getErrorMessage } from "@/utils/helpers";
 import type {
   AttendanceSession,
   AttendanceRecord,
+  Batch,
   AttendanceSummary,
   BulkAttendanceEntry,
   AttendanceStatus,
@@ -22,7 +24,14 @@ const SUPABASE_NOT_CONFIGURED = {
   success: false,
 } as const;
 
-const SESSION_SELECT = "*, batch:batches(*), conductor:users!conducted_by(id, name)";
+const SESSION_SELECT =
+  "id, institute_id, batch_id, session_date, session_type, topic, is_locked, notes, batch:batches(id, name), conductor:users!conducted_by(id, name)";
+
+const ATTENDANCE_DEBUG = import.meta.env.DEV;
+
+function debugAttendance(label: string, payload: unknown) {
+  if (ATTENDANCE_DEBUG) console.debug(`[attendance.service] ${label}`, payload);
+}
 
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
@@ -38,9 +47,15 @@ export async function createAttendanceSession(payload: {
 }): Promise<ApiResponse<AttendanceSession>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("attendance_sessions")
-    .insert({
+  if (!payload.batch_id) {
+    return {
+      data: null,
+      error: "A batch must be selected before creating an attendance session.",
+      success: false,
+    };
+  }
+
+  const insertRow = {
       institute_id: payload.institute_id,
       batch_id: payload.batch_id,
       course_id: payload.course_id,
@@ -50,17 +65,32 @@ export async function createAttendanceSession(payload: {
       topic: payload.topic ?? null,
       notes: payload.notes ?? null,
       is_locked: false,
-    })
+    };
+
+  debugAttendance("createAttendanceSession:payload", insertRow);
+
+  const { data, error } = await supabase
+    .from("attendance_sessions")
+    .insert(insertRow)
     .select(SESSION_SELECT)
     .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as AttendanceSession, error: null, success: true };
+  debugAttendance("createAttendanceSession:response", { data, error });
+
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
+
+  const session = data as AttendanceSession;
+  if (!session.batch_id && session.batch?.id) {
+    session.batch_id = session.batch.id;
+  }
+
+  return { data: session, error: null, success: true };
 }
 
 export async function getAttendanceSessions(
   instituteId: string,
   filters?: { batchId?: string; dateFrom?: string; dateTo?: string },
+  abortSignal?: AbortSignal,
 ): Promise<ApiResponse<AttendanceSession[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -74,40 +104,134 @@ export async function getAttendanceSessions(
   if (filters?.dateFrom) query = query.gte("session_date", filters.dateFrom);
   if (filters?.dateTo) query = query.lte("session_date", filters.dateTo);
 
-  const { data, error } = await query;
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as AttendanceSession[], error: null, success: true };
+  try {
+    const { data, error } = await query.abortSignal(abortSignal);
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+
+    const sessions = ((data ?? []) as AttendanceSession[]).map((session) => {
+      if (!session.batch_id && session.batch?.id) {
+        return { ...session, batch_id: session.batch.id };
+      }
+      return session;
+    });
+
+    return { data: sessions, error: null, success: true };
+  } catch (err) {
+    if (isAbortError(err)) return { data: null, error: "Aborted", success: false };
+
+    const message = getErrorMessage(err, "An unexpected error occurred in getAttendanceSessions");
+    console.error("[getAttendanceSessions] exception:", err);
+    return { data: null, error: message, success: false };
+  }
 }
 
+/**
+ * Fetch a single session with all its attendance records.
+ */
 export async function getSessionWithRecords(
   sessionId: string,
 ): Promise<ApiResponse<AttendanceSession & { records: AttendanceRecord[] }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data: sessionData, error: sessionError } = await supabase
-    .from("attendance_sessions")
-    .select(SESSION_SELECT)
-    .eq("id", sessionId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("attendance_sessions")
+      .select("*, records:attendance_records(*)")
+      .eq("id", sessionId)
+      .single();
 
-  if (sessionError) return { data: null, error: sessionError.message, success: false };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as any, error: null, success: true };
+  } catch (err) {
+    const message = getErrorMessage(err, "Failed to load session details.");
+    console.error("[getSessionWithRecords] exception:", err);
+    return { data: null, error: message, success: false };
+  }
+}
 
-  const { data: recordsData, error: recordsError } = await supabase
-    .from("attendance_records")
-    .select("*, student:students(*, user:users(*))")
-    .eq("session_id", sessionId)
-    .order("marked_at", { ascending: true });
+/**
+ * Save attendance records for a session.
+ */
+export async function saveAttendanceRecords(
+  sessionId: string,
+  instituteId: string,
+  records: { student_id: string; status: "present" | "absent" | "late" | "excused"; notes?: string }[],
+): Promise<ApiResponse<null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  if (recordsError) return { data: null, error: recordsError.message, success: false };
+  try {
+    // ── Step 1: Delete existing records for this session ─────────────────────
+    const { error: deleteError } = await supabase
+      .from("attendance_records")
+      .delete()
+      .eq("session_id", sessionId);
 
-  return {
-    data: {
-      ...(sessionData as AttendanceSession),
-      records: (recordsData ?? []) as AttendanceRecord[],
-    },
-    error: null,
-    success: true,
-  };
+    if (deleteError) return { data: null, error: getErrorMessage(deleteError), success: false };
+
+    // ── Step 2: Insert new records ───────────────────────────────────────────
+    const rows = records.map((r) => ({
+      ...r,
+      session_id: sessionId,
+      institute_id: instituteId,
+    }));
+
+    const { error: insertError } = await supabase.from("attendance_records").insert(rows);
+
+    if (insertError) return { data: null, error: getErrorMessage(insertError), success: false };
+
+    return { data: null, error: null, success: true };
+  } catch (err) {
+    const message = getErrorMessage(err, "Failed to save attendance.");
+    console.error("[saveAttendanceRecords] exception:", err);
+    return { data: null, error: message, success: false };
+  }
+}
+
+/**
+ * Fetch attendance stats for a batch.
+ */
+export async function getBatchAttendanceStats(
+  batchId: string,
+): Promise<ApiResponse<{ total_sessions: number; average_attendance: number }>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  try {
+    const { data: sessions, error: sessionsError } = await supabase
+      .from("attendance_sessions")
+      .select("id")
+      .eq("batch_id", batchId);
+
+    if (sessionsError) return { data: null, error: getErrorMessage(sessionsError), success: false };
+
+    if (!sessions || sessions.length === 0) {
+      return { data: { total_sessions: 0, average_attendance: 0 }, error: null, success: true };
+    }
+
+    const sessionIds = sessions.map((s) => s.id);
+
+    const { data: records, error: recordsError } = await supabase
+      .from("attendance_records")
+      .select("status")
+      .in("session_id", sessionIds);
+
+    if (recordsError) return { data: null, error: getErrorMessage(recordsError), success: false };
+
+    const totalRecords = records?.length ?? 0;
+    const presentRecords = records?.filter((r) => r.status === "present" || r.status === "late").length ?? 0;
+
+    return {
+      data: {
+        total_sessions: sessions.length,
+        average_attendance: totalRecords > 0 ? (presentRecords / totalRecords) * 100 : 0,
+      },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    const message = getErrorMessage(err, "Failed to load attendance stats.");
+    console.error("[getBatchAttendanceStats] exception:", err);
+    return { data: null, error: message, success: false };
+  }
 }
 
 // ── Attendance marking ────────────────────────────────────────────────────────
@@ -116,6 +240,7 @@ export async function markAttendance(payload: {
   session_id: string;
   student_id: string;
   institute_id: string;
+  batch_id?: string | null;
   status: AttendanceStatus;
   notes?: string;
   marked_by: string;
@@ -129,6 +254,7 @@ export async function markAttendance(payload: {
         session_id: payload.session_id,
         student_id: payload.student_id,
         institute_id: payload.institute_id,
+        batch_id: payload.batch_id ?? null,
         status: payload.status,
         notes: payload.notes ?? null,
         marked_by: payload.marked_by,
@@ -138,7 +264,7 @@ export async function markAttendance(payload: {
     .select()
     .single();
 
-  if (error) return { data: null, error: error.message, success: false };
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
   return { data: data as AttendanceRecord, error: null, success: true };
 }
 
@@ -147,6 +273,7 @@ export async function bulkMarkAttendance(
   instituteId: string,
   markedBy: string,
   records: BulkAttendanceEntry[],
+  batchId?: string | null,
 ): Promise<ApiResponse<{ count: number; records: AttendanceRecord[] }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -154,6 +281,7 @@ export async function bulkMarkAttendance(
     session_id: sessionId,
     student_id: r.student_id,
     institute_id: instituteId,
+    batch_id: batchId ?? null,
     status: r.status,
     notes: r.notes ?? null,
     marked_by: markedBy,
@@ -164,7 +292,7 @@ export async function bulkMarkAttendance(
     .upsert(rows, { onConflict: "session_id,student_id" })
     .select();
 
-  if (error) return { data: null, error: error.message, success: false };
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
   return {
     data: {
       count: (data ?? []).length,
@@ -251,6 +379,7 @@ export async function getAttendanceSummary(
     const name = r.student?.user?.name ?? "Unknown";
     const no = r.student?.admission_no ?? "";
     const acc = map.get(r.student_id);
+    
     if (!acc) {
       map.set(r.student_id, {
         student_id: r.student_id,
@@ -271,11 +400,14 @@ export async function getAttendanceSummary(
     }
   }
 
-  const summaries: AttendanceSummary[] = Array.from(map.values()).map((s) => ({
-    ...s,
-    percentage:
-      s.total_sessions > 0 ? Math.round(((s.present + s.late) / s.total_sessions) * 100) : 0,
-  }));
+  // Pre-calculate to avoid redundant math in map
+  const summaries: AttendanceSummary[] = Array.from(map.values()).map((s) => {
+    const sessions = s.total_sessions || 1;
+    return {
+      ...s,
+      percentage: Math.round(((s.present + s.late) / sessions) * 100),
+    };
+  });
 
   summaries.sort((a, b) => a.percentage - b.percentage);
   return { data: summaries, error: null, success: true };
@@ -376,6 +508,8 @@ export async function getStudentAttendanceHistory(
 ): Promise<ApiResponse<StudentAttendanceRecord[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
+  const selectStr = "id, session_id, student_id, status, notes, marked_at, session:attendance_sessions(id, session_date, session_type, topic, batch:batches(id, name), conductor:users!conducted_by(id, name))";
+
   if (filters?.dateFrom || filters?.dateTo) {
     let sq = supabase.from("attendance_sessions").select("id");
     if (filters.dateFrom) sq = sq.gte("session_date", filters.dateFrom);
@@ -387,9 +521,7 @@ export async function getStudentAttendanceHistory(
 
     const { data, error } = await supabase
       .from("attendance_records")
-      .select(
-        "*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))",
-      )
+      .select(selectStr)
       .eq("student_id", studentId)
       .in(
         "session_id",
@@ -403,9 +535,7 @@ export async function getStudentAttendanceHistory(
 
   const { data, error } = await supabase
     .from("attendance_records")
-    .select(
-      "*, session:attendance_sessions(*, batch:batches(*), conductor:users!conducted_by(id, name))",
-    )
+    .select(selectStr)
     .eq("student_id", studentId)
     .order("marked_at", { ascending: false });
 

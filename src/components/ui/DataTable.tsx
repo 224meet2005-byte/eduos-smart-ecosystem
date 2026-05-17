@@ -62,7 +62,7 @@ interface DataTableProps<T> {
    * Returns a stable, unique React key for each row.
    * Usually `(row) => row.id`.
    */
-  keyExtractor: (row: T) => string;
+  keyExtractor?: (row: T) => string;
   /**
    * Optional click handler applied to an entire row.
    * When provided the row receives `cursor-pointer` and a hover highlight.
@@ -97,7 +97,7 @@ interface DataTableProps<T> {
  * />
  * ```
  */
-export function DataTable<T>({
+function DataTableInner<T>({
   columns,
   data,
   isLoading = false,
@@ -109,6 +109,46 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const showEmpty = !isLoading && data.length === 0;
   const isClickable = typeof onRowClick === "function";
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  // Using React.useMemo for rows to prevent unnecessary re-renders of the whole table body
+  const tableRows = React.useMemo(() => {
+    if (isLoading) return <SkeletonRows rows={loadingRows} columns={columns.length} />;
+
+    // Defensive: if caller didn't provide a keyExtractor, fall back to common fields
+    // (id or key) and finally the row index. Also log once to aid debugging.
+    const usingFallback = typeof keyExtractor !== "function";
+    if (usingFallback) {
+      // temporary structured debug log — remove after verification
+      // eslint-disable-next-line no-console
+      console.debug("[DataTable] keyExtractor not provided or invalid; using fallback key generation.");
+    }
+
+    return data.map((row, rowIndex) => {
+      const key =
+        typeof keyExtractor === "function"
+          ? keyExtractor(row)
+          : // fallback: prefer `id`, then `key`, then index
+            ((row as any)?.id ?? (row as any)?.key ?? String(rowIndex));
+
+      return (
+        <tr
+          key={key}
+          onClick={isClickable ? () => onRowClick!(row) : undefined}
+          className={cn(
+            "border-b border-border last:border-0 transition-colors",
+            isClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
+          )}
+        >
+          {columns.map((col) => (
+            <td key={col.key} className={cn("px-4 py-3 align-middle", col.cellClassName)}>
+              {col.render(row, rowIndex)}
+            </td>
+          ))}
+        </tr>
+      );
+    });
+  }, [data, isLoading, loadingRows, columns, keyExtractor, isClickable, onRowClick]);
 
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}>
@@ -134,29 +174,7 @@ export function DataTable<T>({
           </thead>
 
           {/* ── Body ───────────────────────────────────────────────────────── */}
-          <tbody>
-            {/* Loading skeleton */}
-            {isLoading && <SkeletonRows rows={loadingRows} columns={columns.length} />}
-
-            {/* Data rows */}
-            {!isLoading &&
-              data.map((row, rowIndex) => (
-                <tr
-                  key={keyExtractor(row)}
-                  onClick={isClickable ? () => onRowClick!(row) : undefined}
-                  className={cn(
-                    "border-b border-border last:border-0 transition-colors",
-                    isClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
-                  )}
-                >
-                  {columns.map((col) => (
-                    <td key={col.key} className={cn("px-4 py-3 align-middle", col.cellClassName)}>
-                      {col.render(row, rowIndex)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-          </tbody>
+          <tbody>{tableRows}</tbody>
         </table>
       </div>
 
@@ -165,3 +183,5 @@ export function DataTable<T>({
     </div>
   );
 }
+
+    export const DataTable = React.memo(DataTableInner) as typeof DataTableInner;

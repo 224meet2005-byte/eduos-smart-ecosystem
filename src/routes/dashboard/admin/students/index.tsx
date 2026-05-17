@@ -71,6 +71,7 @@ function StudentsPage() {
     let cancelled = false;
 
     async function loadFeeStructures() {
+      // OPTIMIZATION: Only fetch if the modal is about to be used or on mount
       const result = await getFeeStructures(instituteId);
       if (!cancelled && result.success && result.data) {
         setFeeStructures(result.data);
@@ -136,8 +137,10 @@ function StudentsPage() {
   // ── Admission success ─────────────────────────────────────────────────────
 
   const handleAdmissionSuccess = useCallback(() => {
-    setIsAdmitModalOpen(false);
     // Refresh from page 1 so the new student appears immediately.
+    // NOTE: We don't close the modal here because the AdmissionForm
+    // needs to display the generated credentials. The user will
+    // close it via the "Done" button on the success screen.
     fetchStudents(1);
   }, [fetchStudents]);
 

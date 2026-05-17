@@ -30,6 +30,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseFetch } from "@/lib/safe-fetch";
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __EDUOS_SUPABASE_CLIENT__: SupabaseClient | null | undefined;
+  // eslint-disable-next-line no-var
+  var __EDUOS_SUPABASE_ADMIN_CLIENT__: SupabaseClient | null | undefined;
+}
 
 // ── Environment variable detection ──────────────────────────────────────────
 // Typed as `string | undefined` — Vite replaces VITE_* values at build time,
@@ -79,18 +87,27 @@ if (!isSupabaseConfigured && import.meta.env.DEV && typeof window !== "undefined
 // The non-null assertion (!!) below is safe because we checked isSupabaseConfigured
 // above — if it's true, both strings are defined.
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabaseAnonKey!, {
-      auth: {
-        /** Silently refresh the JWT before it expires */
-        autoRefreshToken: true,
-        /** Persist the session in localStorage across page refreshes */
-        persistSession: true,
-        /** Detect OAuth / magic-link tokens from the URL on load */
-        detectSessionInUrl: true,
-      },
-    })
-  : null;
+export const supabase: SupabaseClient | null =
+  globalThis.__EDUOS_SUPABASE_CLIENT__ ??
+  (isSupabaseConfigured
+    ? createClient(supabaseUrl!, supabaseAnonKey!, {
+        auth: {
+          /** Silently refresh the JWT before it expires */
+          autoRefreshToken: true,
+          /** Persist the session in localStorage across page refreshes */
+          persistSession: true,
+          /** Detect OAuth / magic-link tokens from the URL on load */
+          detectSessionInUrl: true,
+        },
+        global: {
+          fetch: createSupabaseFetch(),
+        },
+      })
+    : null);
+
+if (globalThis.__EDUOS_SUPABASE_CLIENT__ === undefined) {
+  globalThis.__EDUOS_SUPABASE_CLIENT__ = supabase;
+}
 
 /**
  * Admin client used for sensitive operations (e.g. creating users without
@@ -100,14 +117,23 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
  * In TanStack Start, this should ONLY be imported and used within server
  * functions (createServerFn) to avoid leaking the service_role key to the browser.
  */
-export const supabaseAdmin: SupabaseClient | null = isSupabaseAdminConfigured
-  ? createClient(supabaseUrl!, supabaseServiceKey!, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : null;
+export const supabaseAdmin: SupabaseClient | null =
+  globalThis.__EDUOS_SUPABASE_ADMIN_CLIENT__ ??
+  (isSupabaseAdminConfigured
+    ? createClient(supabaseUrl!, supabaseServiceKey!, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+        global: {
+          fetch: createSupabaseFetch(),
+        },
+      })
+    : null);
+
+if (globalThis.__EDUOS_SUPABASE_ADMIN_CLIENT__ === undefined) {
+  globalThis.__EDUOS_SUPABASE_ADMIN_CLIENT__ = supabaseAdmin;
+}
 
 // Re-export the type so consumers don't need to import from supabase-js directly.
 export type { SupabaseClient } from "@supabase/supabase-js";

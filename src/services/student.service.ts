@@ -15,9 +15,14 @@
 // ---------------------------------------------------------------------------
 
 import { supabase, supabaseAdmin } from "@/lib/supabase";
-import { generateStudentCredentials, generateTempPassword } from "@/utils/studentCredentials";
+import { generateParentCredentials } from "@/utils/parentCredentials";
+import { 
+  generateStudentCredentials, 
+  generateTempPassword 
+} from "@/utils/studentCredentials";
 import { getStudentBatch } from "@/services/batch.service";
 import { getStudentAttendanceHistory } from "@/services/attendance.service";
+import { isAbortError, getErrorMessage } from "@/utils/helpers";
 import type {
   Student,
   StudentParent,
@@ -38,6 +43,8 @@ import type {
   StudentAttendanceStats,
   StudentBatchInfo,
   StudentDashboardData,
+  ParentAccountStatus,
+  ParentEmailDeliveryStatus,
 } from "@/types";
 
 // ── Shared "not configured" error response ───────────────────────────────────
@@ -48,6 +55,55 @@ const SUPABASE_NOT_CONFIGURED = {
   error: "Supabase is not configured.",
   success: false,
 } as const;
+
+interface ParentCredentialEmailPayload {
+  parentName: string;
+  parentEmail: string;
+  parentTemporaryPassword: string;
+  studentName: string;
+  instituteName: string;
+  portalUrl: string;
+}
+
+async function sendParentCredentialEmail(
+  payload: ParentCredentialEmailPayload,
+): Promise<ApiResponse<null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const maxAttempts = 3;
+  let lastError = "Unknown email error.";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const { data, error } = await supabase.functions.invoke("send-parent-credentials", {
+      body: {
+        parent_name: payload.parentName,
+        parent_email: payload.parentEmail,
+        parent_temporary_password: payload.parentTemporaryPassword,
+        student_name: payload.studentName,
+        institute_name: payload.instituteName,
+        portal_url: payload.portalUrl,
+      },
+    });
+
+    if (!error && data?.success) {
+      return { data: null, error: null, success: true };
+    }
+
+    lastError = error?.message ?? data?.error ?? "Email delivery failed.";
+    
+    // In development, if the function fails because it's not deployed or 
+    // keys are missing, we log the credentials to the console as a fallback.
+    if (import.meta.env.DEV && (lastError.includes("404") || lastError.includes("RESEND_API_KEY"))) {
+      console.log("----------------------------------------------------------");
+      console.log(`[EMAIL FALLBACK] To: ${payload.parentEmail}`);
+      console.log(`[EMAIL FALLBACK] Password: ${payload.parentTemporaryPassword}`);
+      console.log("----------------------------------------------------------");
+      return { data: null, error: null, success: true };
+    }
+  }
+
+  return { data: null, error: lastError, success: false };
+}
 
 function getAttendanceDateKey(record: StudentAttendanceRecord): string {
   return record.session?.session_date ?? record.marked_at.slice(0, 10);
@@ -160,17 +216,29 @@ function buildAttendanceStats(
  * Return all students who belong to a given institute, newest first.
  * The joined `user` relation provides name/email without a second round-trip.
  */
-export async function getStudentsByInstitute(instituteId: string): Promise<ApiResponse<Student[]>> {
+/**
+ * Return all students for an institute, with their basic user profiles.
+ * Optimized to fetch only necessary columns for list views.
+ */
+export async function getStudentsByInstitute(
+  instituteId: string,
+): Promise<ApiResponse<Student[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("institute_id", instituteId)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, avatar_url)")
+      .eq("institute_id", instituteId)
+      .order("created_at", { ascending: false });
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student[], error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student[], error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load students.");
+    console.error("[getStudentsByInstitute] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -180,14 +248,20 @@ export async function getStudentsByInstitute(instituteId: string): Promise<ApiRe
 export async function getStudentById(id: string): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("id", id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("id, user_id, admission_no, status, created_at, batch_id, institute_id, emergency_contact, user:users(id, name, email, phone, avatar_url, role, is_active)")
+      .eq("id", id)
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load student details.");
+    console.error("[getStudentById] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -197,14 +271,20 @@ export async function getStudentById(id: string): Promise<ApiResponse<Student>> 
 export async function getStudentByUserId(userId: string): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("user_id", userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url, role, is_active)")
+      .eq("user_id", userId)
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load student profile.");
+    console.error("[getStudentByUserId] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -217,26 +297,32 @@ export async function getStudentsByParentId(
 ): Promise<ApiResponse<StudentLinkedForParent[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("student_parents")
-    .select("relation_type, student:students(*, user:users(*))")
-    .eq("parent_id", parentId);
+  try {
+    const { data, error } = await supabase
+      .from("student_parents")
+      .select("relation_type, student:students(id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url, role, is_active))")
+      .eq("parent_id", parentId);
 
-  if (error) return { data: null, error: error.message, success: false };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
 
-  const rows = (data ?? []) as unknown as Array<{
-    relation_type: StudentLinkedForParent["relation_type"];
-    student: Student | null;
-  }>;
+    const rows = (data ?? []) as unknown as Array<{
+      relation_type: StudentLinkedForParent["relation_type"];
+      student: Student | null;
+    }>;
 
-  const students: StudentLinkedForParent[] = rows
-    .filter((row) => row.student !== null)
-    .map((row) => ({
-      ...row.student!,
-      relation_type: row.relation_type,
-    }));
+    const students: StudentLinkedForParent[] = rows
+      .filter((row) => row.student !== null)
+      .map((row) => ({
+        ...row.student!,
+        relation_type: row.relation_type,
+      }));
 
-  return { data: students, error: null, success: true };
+    return { data: students, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load linked students.");
+    console.error("[getStudentsByParentId] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -262,6 +348,7 @@ export async function searchStudents(
   filters: StudentFilters = {},
   page = 1,
   pageSize = 20,
+  abortSignal?: AbortSignal,
 ): Promise<ApiResponse<PaginatedResponse<Student>>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -272,23 +359,27 @@ export async function searchStudents(
     // ── Step 1: Fetch the student rows (no count, no cross-table filter) ────
     let query = supabase
       .from("students")
-      .select("*, user:users(id, name, email, phone, avatar_url, role, is_active)")
+      .select("id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url)")
       .eq("institute_id", instituteId)
       .order("created_at", { ascending: false });
 
     if (filters.status) query = query.eq("status", filters.status);
-    if (filters.batchId) query = query.eq("batch_id", filters.batchId);
+    const batchIdFilter =
+      filters.batchId ??
+      (filters as StudentFilters & { batch_id?: string }).batch_id;
+    if (batchIdFilter) query = query.eq("batch_id", batchIdFilter);
 
     // admission_no is a LOCAL column — safe to filter directly
     if (filters.search) {
       query = query.ilike("admission_no", `%${filters.search}%`);
     }
 
-    const { data, error } = await query.range(from, to);
+    const { data, error } = await query.range(from, to).abortSignal(abortSignal);
 
     if (error) {
-      console.error("[searchStudents] query error:", error.message, error);
-      return { data: null, error: error.message, success: false };
+      const msg = error.message || "Failed to fetch students from database.";
+      console.error("[searchStudents] query error:", msg, error);
+      return { data: null, error: msg, success: false };
     }
 
     // ── Step 2: Client-side name/email filter (avoids cross-table OR) ───────
@@ -315,12 +406,13 @@ export async function searchStudents(
         .eq("institute_id", instituteId);
 
       if (filters.status) countQuery = countQuery.eq("status", filters.status);
-      if (filters.batchId) countQuery = countQuery.eq("batch_id", filters.batchId);
+      if (batchIdFilter) countQuery = countQuery.eq("batch_id", batchIdFilter);
       if (filters.search) countQuery = countQuery.ilike("admission_no", `%${filters.search}%`);
 
-      const { count, error: countError } = await countQuery;
+      const { count, error: countError } = await countQuery.abortSignal(abortSignal);
       if (!countError) total = count ?? 0;
-    } catch {
+    } catch (countErr) {
+      if (isAbortError(countErr)) throw countErr;
       // Count failure is non-fatal — pagination degrades gracefully
       total = items.length;
     }
@@ -333,8 +425,12 @@ export async function searchStudents(
       success: true,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error in searchStudents";
-    console.error("[searchStudents] unexpected exception:", message);
+    if (isAbortError(err)) {
+      return { data: null, error: "Aborted", success: false };
+    }
+
+    const message = err instanceof Error ? err.message : "An unexpected network error occurred.";
+    console.error("[searchStudents] unexpected exception:", message, err);
     return { data: null, error: message, success: false };
   }
 }
@@ -372,29 +468,35 @@ export async function getStudentWithParents(
 ): Promise<ApiResponse<Student & { parents: StudentParent[] }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data: studentData, error: studentError } = await supabase
-    .from("students")
-    .select("*, user:users(*)")
-    .eq("id", studentId)
-    .single();
+  try {
+    const { data: studentData, error: studentError } = await supabase
+      .from("students")
+      .select("id, user_id, admission_no, status, batch_id, institute_id, emergency_contact, user:users(id, name, email, phone, avatar_url)")
+      .eq("id", studentId)
+      .single();
 
-  if (studentError) return { data: null, error: studentError.message, success: false };
+    if (studentError) return { data: null, error: getErrorMessage(studentError), success: false };
 
-  const { data: parentsData, error: parentsError } = await supabase
-    .from("student_parents")
-    .select("*, parent:parents(*, user:users(*))")
-    .eq("student_id", studentId);
+    const { data: parentsData, error: parentsError } = await supabase
+      .from("student_parents")
+      .select("relation_type, parent:parents(id, user_id, occupation, user:users(id, name, email, phone, avatar_url))")
+      .eq("student_id", studentId);
 
-  if (parentsError) return { data: null, error: parentsError.message, success: false };
+    if (parentsError) return { data: null, error: getErrorMessage(parentsError), success: false };
 
-  return {
-    data: {
-      ...(studentData as Student),
-      parents: (parentsData ?? []) as StudentParent[],
-    },
-    error: null,
-    success: true,
-  };
+    return {
+      data: {
+        ...(studentData as Student),
+        parents: (parentsData ?? []) as StudentParent[],
+      },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load student and parent details.");
+    console.error("[getStudentWithParents] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 export async function getCurrentStudentDashboard(
@@ -403,39 +505,45 @@ export async function getCurrentStudentDashboard(
 ): Promise<ApiResponse<StudentDashboardData>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const studentResult = await getStudentByUserId(userId);
-  if (!studentResult.success || !studentResult.data) {
+  try {
+    const studentResult = await getStudentByUserId(userId);
+    if (!studentResult.success || !studentResult.data) {
+      return {
+        data: null,
+        error: studentResult.error ?? "Student profile not found.",
+        success: false,
+      };
+    }
+
+    const student = studentResult.data;
+
+    const batchPromise = student.batch_id
+      ? (getStudentBatch(student.batch_id, instituteId) as Promise<ApiResponse<StudentBatchInfo>>)
+      : Promise.resolve({ data: null, error: null, success: true } as ApiResponse<StudentBatchInfo>);
+
+    const [batchResult, historyResult] = await Promise.all([
+      batchPromise,
+      getStudentAttendanceHistory(student.id),
+    ]);
+
+    const history = historyResult.success && historyResult.data ? historyResult.data : [];
+    const stats = buildAttendanceStats(student.id, history);
+
     return {
-      data: null,
-      error: studentResult.error ?? "Student profile not found.",
-      success: false,
+      data: {
+        student,
+        batch: batchResult.success ? batchResult.data : null,
+        history,
+        stats,
+      },
+      error: [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
+      success: true,
     };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load dashboard data.");
+    console.error("[getCurrentStudentDashboard] exception:", err);
+    return { data: null, error: msg, success: false };
   }
-
-  const student = studentResult.data;
-
-  const batchPromise = student.batch_id
-    ? (getStudentBatch(student.batch_id, instituteId) as Promise<ApiResponse<StudentBatchInfo>>)
-    : Promise.resolve({ data: null, error: null, success: true } as ApiResponse<StudentBatchInfo>);
-
-  const [batchResult, historyResult] = await Promise.all([
-    batchPromise,
-    getStudentAttendanceHistory(student.id),
-  ]);
-
-  const history = historyResult.success && historyResult.data ? historyResult.data : [];
-  const stats = buildAttendanceStats(student.id, history);
-
-  return {
-    data: {
-      student,
-      batch: batchResult.success ? batchResult.data : null,
-      history,
-      stats,
-    },
-    error: [batchResult.error, historyResult.error].filter(Boolean).join(" | ") || null,
-    success: true,
-  };
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -451,10 +559,16 @@ export async function createStudent(
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase.from("students").insert(payload).select().single();
+  try {
+    const { data, error } = await supabase.from("students").insert(payload).select().single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to create student profile.");
+    console.error("[createStudent] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -469,15 +583,21 @@ export async function updateStudent(
 ): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .update(payload)
-    .eq("id", id)
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .update(payload)
+      .eq("id", id)
+      .select()
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to update student.");
+    console.error("[updateStudent] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -488,15 +608,21 @@ export async function updateStudent(
 export async function archiveStudent(id: string): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .update({ status: "inactive" })
-    .eq("id", id)
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .update({ status: "inactive" })
+      .eq("id", id)
+      .select()
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to archive student.");
+    console.error("[archiveStudent] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -506,15 +632,21 @@ export async function archiveStudent(id: string): Promise<ApiResponse<Student>> 
 export async function restoreStudent(id: string): Promise<ApiResponse<Student>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .update({ status: "active" })
-    .eq("id", id)
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .update({ status: "active" })
+      .eq("id", id)
+      .select()
+      .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Student, error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to restore student.");
+    console.error("[restoreStudent] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -535,7 +667,8 @@ export async function admitStudent(
 ): Promise<ApiResponse<AdmitStudentResult>> {
   if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
 
-  // ── Step 1: Generate student credentials ──────────────────────────────────
+  try {
+    // ── Step 1: Generate student credentials ──────────────────────────────────
   const instituteName = payload.institute_name ?? "edu";
   const credentials = generateStudentCredentials(payload.student_name, instituteName);
 
@@ -564,6 +697,10 @@ export async function admitStudent(
   const studentUserId = authData.user.id;
 
   // ── Step 3: Optional Parent Auth User ─────────────────────────────────────
+  let parentAccountStatus: ParentAccountStatus = "not_provided";
+  let parentEmailDeliveryStatus: ParentEmailDeliveryStatus = "not_applicable";
+  let parentResolvedEmail: string | null = null;
+  let parentGeneratedPassword: string | null = null;
   let parentUserId: string | null = null;
   const hasParentBlock =
     !!payload.parent_name?.trim() &&
@@ -571,46 +708,60 @@ export async function admitStudent(
     payload.parent_relation_type != null;
 
   if (hasParentBlock) {
-    const parentEmail = payload.parent_email!.trim().toLowerCase();
+    parentResolvedEmail = payload.parent_email!.trim().toLowerCase();
 
-    // Check if parent user already exists
+    // Check if email is already mapped to a compatible parent account.
     const { data: existingUser } = await supabase
       .from("users")
-      .select("id")
-      .eq("email", parentEmail)
-      .eq("role", "parent")
+      .select("id, role, institute_id")
+      .eq("email", parentResolvedEmail)
       .maybeSingle();
 
     if (existingUser) {
+      if (existingUser.role !== "parent") {
+        return {
+          data: null,
+          error: "This email is already used by a non-parent account.",
+          success: false,
+        };
+      }
+
+      if (existingUser.institute_id !== payload.institute_id) {
+        return {
+          data: null,
+          error: "This parent email is already registered with another institute.",
+          success: false,
+        };
+      }
+
       parentUserId = existingUser.id;
+      parentAccountStatus = "existing_linked";
     } else {
-      // Create new parent auth account
+      const parentCredentials = generateParentCredentials(payload.parent_name!);
+      parentGeneratedPassword = parentCredentials.temporaryPassword;
+
+      // Create new parent auth account with a forced password-change flag.
       const { data: pAuthData, error: pAuthError } = await supabaseAdmin.auth.admin.createUser({
-        email: parentEmail,
+        email: parentResolvedEmail,
+        password: parentGeneratedPassword,
         email_confirm: true,
         user_metadata: {
           name: payload.parent_name,
           role: "parent",
           institute_id: payload.institute_id,
+          force_password_change: true,
         },
       });
 
       if (!pAuthError && pAuthData.user) {
         parentUserId = pAuthData.user.id;
-      } else if (pAuthError?.message.includes("already registered") || pAuthError?.status === 422) {
-        // Parent already exists in auth.users but not in our public.users (or not for this institute)
-        // We need to find their ID. We use listUsers with a filter.
-        const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-        if (!listError && listData.users) {
-          const user = listData.users.find((u) => u.email?.toLowerCase() === parentEmail);
-          if (user) {
-            parentUserId = user.id;
-          }
-        }
-      }
-
-      if (!parentUserId) {
-        console.error("[admitStudent] Failed to create or find parent auth user:", pAuthError?.message);
+        parentAccountStatus = "created";
+      } else {
+        return {
+          data: null,
+          error: pAuthError?.message ?? "Failed to create parent auth account.",
+          success: false,
+        };
       }
     }
   }
@@ -666,21 +817,32 @@ export async function admitStudent(
     return { data: null, error: friendly ?? rpcError.message, success: false };
   }
 
-  // ── Step 5: Return credentials (shown ONCE to admin, never persisted) ─────
   const result = rpcData as { student_id: string; user_id: string; admission_no: string };
 
-  return {
-    data: {
-      student_id: result.student_id,
-      user_id: studentUserId,
-      admission_no: result.admission_no,
-      login_id: credentials.loginId,
-      generated_email: credentials.email,
-      temporary_password: credentials.tempPassword,
-    },
-    error: null,
-    success: true,
-  };
+    // ── Step 5: Return credentials (shown ONCE to admin, never persisted) ─────
+    return {
+      data: {
+        student_id: result.student_id,
+        user_id: studentUserId,
+        admission_no: result.admission_no,
+        login_id: credentials.loginId,
+        generated_email: credentials.email,
+        temporary_password: credentials.tempPassword,
+        parent_account_status: parentAccountStatus,
+        parent_email_delivery_status: "not_applicable",
+        parent_email: parentResolvedEmail,
+        parent_temporary_password: parentAccountStatus === "created" ? parentGeneratedPassword : null,
+        parent_user_id: parentUserId,
+        parent_first_login_change_required: parentAccountStatus === "created",
+      },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to admit student.");
+    console.error("[admitStudent] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -692,21 +854,27 @@ export async function resetStudentPassword(
 ): Promise<ApiResponse<{ temporary_password: string }>> {
   if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
 
-  const newPassword = generateTempPassword();
+  try {
+    const newPassword = generateTempPassword();
 
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-    password: newPassword,
-  });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
 
-  if (error) {
-    return { data: null, error: error.message, success: false };
+    if (error) {
+      return { data: null, error: getErrorMessage(error), success: false };
+    }
+
+    return {
+      data: { temporary_password: newPassword },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to reset student password.");
+    console.error("[resetStudentPassword] exception:", err);
+    return { data: null, error: msg, success: false };
   }
-
-  return {
-    data: { temporary_password: newPassword },
-    error: null,
-    success: true,
-  };
 }
 
 /**

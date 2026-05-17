@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/utils/helpers";
 import type { Institute, ApiResponse, SubscriptionPlan } from "@/types";
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export async function getAllInstitutes(): Promise<ApiResponse<Institute[]>> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) return { data: null, error: error.message, success: false };
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
   return { data: data as Institute[], error: null, success: true };
 }
 
@@ -34,7 +35,7 @@ export async function getAllInstitutes(): Promise<ApiResponse<Institute[]>> {
 export async function getInstituteById(id: string): Promise<ApiResponse<Institute>> {
   const { data, error } = await supabase.from("institutes").select("*").eq("id", id).single();
 
-  if (error) return { data: null, error: error.message, success: false };
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
   return { data: data as Institute, error: null, success: true };
 }
 
@@ -51,7 +52,7 @@ export async function createInstitute(
 ): Promise<ApiResponse<Institute>> {
   const { data, error } = await supabase.from("institutes").insert(payload).select().single();
 
-  if (error) return { data: null, error: error.message, success: false };
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
   return { data: data as Institute, error: null, success: true };
 }
 

@@ -21,18 +21,33 @@
 // This component is purely behavioural — it renders children as-is.
 // ---------------------------------------------------------------------------
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/services/auth.service";
+import { getErrorMessage } from "@/utils/helpers";
+
+const AUTH_REFRESH_DEBOUNCE_MS = 800;
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { login, logout, setLoading } = useAuthStore();
+  const login = useAuthStore((s) => s.login);
+  const logout = useAuthStore((s) => s.logout);
+  const setLoading = useAuthStore((s) => s.setLoading);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     // ── Guard: Supabase not configured ──────────────────────────────────────
@@ -51,32 +66,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // ── Phase 1: Restore session from localStorage ───────────────────────────
     // Runs once on mount. getCurrentUser() checks the stored JWT and fetches
     // the full user + institute record from the database.
-    async function initSession() {
+    async function hydrateFromSession() {
       setLoading(true);
-      const result = await getCurrentUser();
-      if (result.success && result.data) {
-        login(result.data.user, result.data.institute);
-      } else {
-        // No active session (or session fetch failed) → clear store.
+      try {
+        const result = await getCurrentUser();
+        if (!mountedRef.current) return;
+        if (result.success && result.data) {
+          login(result.data.user, result.data.institute);
+        } else {
+          logout();
+        }
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.warn("[AuthProvider] session hydrate failed:", getErrorMessage(err));
         logout();
       }
     }
 
-    initSession();
+    void hydrateFromSession();
+
+    function scheduleHydrate(event: AuthChangeEvent) {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      const delay = event === "TOKEN_REFRESHED" ? AUTH_REFRESH_DEBOUNCE_MS : 0;
+      refreshTimerRef.current = setTimeout(() => {
+        void hydrateFromSession();
+      }, delay);
+    }
 
     // ── Phase 2: React to live Supabase auth events ──────────────────────────
-    // Handles sign-in from another tab, token expiry + silent refresh,
-    // and explicit sign-out from any device.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === "SIGNED_OUT" || !session) {
         logout();
-      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const result = await getCurrentUser();
-        if (result.success && result.data) {
-          login(result.data.user, result.data.institute);
-        }
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        scheduleHydrate(event);
       }
     });
 

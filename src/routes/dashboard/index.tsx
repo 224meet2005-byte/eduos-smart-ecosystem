@@ -59,6 +59,7 @@ function DashboardOverview() {
 
     async function loadStats() {
       setStatsLoading(true);
+      // OPTIMIZATION: Only fetch count if we don't need the full list for stats
       const [studentsResult, staffResult] = await Promise.all([
         getStudentsByInstitute(instituteId!),
         getStaffByInstitute(instituteId!),

@@ -37,6 +37,7 @@ import { useAuthStore } from "@/store/authStore";
 import {
   getFeeStructures,
   getPendingDues,
+  getInstituteStudentFees,
   getRevenueStats,
   createFeeStructure,
   deleteFeeStructure,
@@ -67,8 +68,9 @@ export const Route = createFileRoute("/dashboard/admin/fees/")({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Format a number as Indian rupees: ₹1,00,000 */
-function inr(amount: number) {
-  return `₹${amount.toLocaleString("en-IN")}`;
+function inr(amount?: number | null) {
+  const n = Number(amount ?? 0) || 0;
+  return `₹${n.toLocaleString("en-IN")}`;
 }
 
 /** Derive the current academic year as "YYYY-YY" from the current date. */
@@ -411,14 +413,24 @@ function FeesPage() {
     if (!instituteId) return;
     setIsLoadingDues(true);
     setDuesError(null);
-    const result = await getPendingDues(instituteId);
+
+    // When the status filter is 'all' we want to show every student_fee row
+    // (including paid) so admins can inspect completed payments. Otherwise
+    // keep the optimized pending-dues query for performance.
+    let result;
+    if (statusFilter === "all") {
+      result = await getInstituteStudentFees(instituteId);
+    } else {
+      result = await getPendingDues(instituteId);
+    }
+
     if (result.success && result.data) {
       setPendingDues(result.data);
     } else {
       setDuesError(result.error ?? "Failed to load pending dues.");
     }
     setIsLoadingDues(false);
-  }, [instituteId]);
+  }, [instituteId, statusFilter]);
 
   const fetchStructures = useCallback(async () => {
     if (!instituteId) return;
@@ -680,7 +692,9 @@ function FeesPage() {
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredDues.map((sf) => {
-                        const remaining = Math.max(0, sf.final_amount - sf.paid_so_far);
+                        const finalAmt = Number(sf.final_amount ?? 0);
+                        const paidSoFar = Number(sf.paid_so_far ?? 0);
+                        const remaining = Math.max(0, finalAmt - paidSoFar);
                         const studentName = sf.student?.user?.name ?? "—";
                         const admissionNo = sf.student?.admission_no ?? "—";
                         const feeName = sf.fee_structure?.name ?? "—";

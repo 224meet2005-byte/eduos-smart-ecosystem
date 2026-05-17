@@ -38,10 +38,10 @@ import {
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useAuthStore } from "@/store/authStore";
-import { formatDate } from "@/utils/helpers";
+import { formatDate, isAbortError } from "@/utils/helpers";
 import { toast } from "sonner";
-import { searchStudents } from "@/services/student.service";
-import { getActiveAttendanceBatches } from "@/services/batch.service";
+import { getActiveAttendanceBatches, getBatchStudents } from "@/services/batch.service";
+import { getStaffBatchAssignments, getStaffByUserId } from "@/services/staff.service";
 import {
   getAttendanceSessions,
   getSessionWithRecords,
@@ -52,6 +52,7 @@ import {
 import { CreateSessionModal } from "@/modules/attendance/components/CreateSessionModal";
 import { AttendanceMarkingTable } from "@/modules/attendance/components/AttendanceMarkingTable";
 import { AttendanceSummaryCard } from "@/modules/attendance/components/AttendanceSummaryCard";
+import { resolveSessionBatchId } from "@/modules/attendance/utils/sessionHelpers";
 import type {
   AttendanceSession,
   AttendanceRecord,
@@ -207,10 +208,12 @@ function SessionCard({ session, isExpanded, isLocking, onExpand, onLock }: Sessi
 function AttendancePage() {
   const { user } = useAuthStore();
   const instituteId = user?.institute_id ?? "";
+  const isStaffUser = user?.role === "staff";
 
   // ── Shared state ─────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>("sessions");
   const [batches, setBatches] = useState<AttendanceBatchOption[]>([]);
+  const [staffAssignedBatchIds, setStaffAssignedBatchIds] = useState<string[]>([]);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -241,51 +244,153 @@ function AttendancePage() {
   const [isLoadingSummaries, setIsLoadingSummaries] = useState(false);
   const [summariesError, setSummariesError] = useState<string | null>(null);
 
-  // ── Fetch batches on mount ────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Fetch batches (refreshes on focus so new batches appear after creation) ─
+  const loadAttendanceBatches = useCallback(async () => {
     if (!instituteId) return;
 
     setIsLoadingBatches(true);
 
-    getActiveAttendanceBatches(instituteId).then((result) => {
-      if (result.success && result.data) {
-        setBatches(
-          result.data.map((b) => ({
-            id: b.id,
-            name: b.name,
-            course_name: b.course_name,
-            label: b.course_name ? `${b.name} • ${b.course_name}` : b.name,
-          })),
-        );
+    if (isStaffUser && user?.id) {
+      const staffResult = await getStaffByUserId(user.id);
+
+      if (!staffResult.success || !staffResult.data) {
+        setBatches([]);
+        setStaffAssignedBatchIds([]);
+        setIsLoadingBatches(false);
+        if (staffResult.error) toast.error(staffResult.error);
+        return;
       }
+
+      const assignmentsResult = await getStaffBatchAssignments(staffResult.data.id);
+
+      if (!assignmentsResult.success || !assignmentsResult.data) {
+        setBatches([]);
+        setStaffAssignedBatchIds([]);
+        setIsLoadingBatches(false);
+        if (assignmentsResult.error) toast.error(assignmentsResult.error);
+        return;
+      }
+
+      const scopedBatches = assignmentsResult.data
+        .filter((a) => a.batch && a.batch.is_active !== false && a.batch.status !== "inactive")
+        .map((a) => ({
+          id: a.batch!.id,
+          name: a.batch!.name,
+          course_name: a.batch!.course_name,
+          label: a.batch!.course_name ? `${a.batch!.name} • ${a.batch!.course_name}` : a.batch!.name,
+        }));
+
+      const deduped = Array.from(new Map(scopedBatches.map((row) => [row.id, row])).values());
+      setBatches(deduped);
+      setStaffAssignedBatchIds(deduped.map((row) => row.id));
       setIsLoadingBatches(false);
-    });
-  }, [instituteId]);
+      return;
+    }
+
+    const result = await getActiveAttendanceBatches(instituteId);
+
+    if (import.meta.env.DEV) {
+      console.debug("[attendance] loadAttendanceBatches", {
+        instituteId,
+        success: result.success,
+        count: result.data?.length,
+        error: result.error,
+      });
+    }
+
+    if (result.success && result.data) {
+      setBatches(
+        result.data.map((b) => ({
+          id: b.id,
+          name: b.name,
+          course_name: b.course_name,
+          label: b.course_name ? `${b.name} • ${b.course_name}` : b.name,
+        })),
+      );
+      setStaffAssignedBatchIds([]);
+    } else if (result.error) {
+      toast.error(result.error);
+    }
+
+    setIsLoadingBatches(false);
+  }, [instituteId, isStaffUser, user?.id]);
+
+  useEffect(() => {
+    void loadAttendanceBatches();
+  }, [loadAttendanceBatches]);
+
+  useEffect(() => {
+    if (!instituteId) return;
+
+    const onFocus = () => {
+      void loadAttendanceBatches();
+    };
+
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [instituteId, loadAttendanceBatches]);
+
+  useEffect(() => {
+    if (!isStaffUser || batches.length === 0) return;
+
+    const allowed = new Set(batches.map((batch) => batch.id));
+
+    if (sessionBatchFilter && !allowed.has(sessionBatchFilter)) {
+      setSessionBatchFilter(batches[0].id);
+    }
+
+    if (reportBatchId && !allowed.has(reportBatchId)) {
+      setReportBatchId("");
+    }
+  }, [isStaffUser, batches, sessionBatchFilter, reportBatchId]);
 
   // ── Fetch sessions whenever date or batch filter changes ─────────────────
-  const fetchSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (abortSignal?: AbortSignal) => {
     if (!instituteId) return;
 
     setIsLoadingSessions(true);
     setSessionsError(null);
 
-    const result = await getAttendanceSessions(instituteId, {
-      dateFrom: selectedDate,
-      dateTo: selectedDate,
-      batchId: sessionBatchFilter || undefined,
-    });
+    try {
+      const result = await getAttendanceSessions(
+        instituteId,
+        {
+          dateFrom: selectedDate,
+          dateTo: selectedDate,
+          batchId: sessionBatchFilter || undefined,
+        },
+        abortSignal,
+      );
 
-    if (result.success && result.data) {
-      setSessions(result.data);
-    } else {
-      setSessionsError(result.error ?? "Failed to load sessions.");
+      if (result.success && result.data) {
+        if (isStaffUser) {
+          const allowed = new Set(staffAssignedBatchIds);
+          const scoped = result.data.filter((session) => {
+            const batchId = resolveSessionBatchId(session);
+            return Boolean(batchId && allowed.has(batchId));
+          });
+          setSessions(scoped);
+        } else {
+          setSessions(result.data);
+        }
+      } else if (result.error !== "Aborted") {
+        setSessionsError(result.error ?? "Failed to load sessions.");
+      }
+    } catch (err) {
+      if (!isAbortError(err)) {
+        const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
+        console.error("[fetchSessions] exception:", err);
+        setSessionsError(msg);
+      }
+    } finally {
+      setIsLoadingSessions(false);
     }
-
-    setIsLoadingSessions(false);
-  }, [instituteId, selectedDate, sessionBatchFilter]);
+  }, [instituteId, selectedDate, sessionBatchFilter, isStaffUser, staffAssignedBatchIds]);
 
   useEffect(() => {
-    fetchSessions();
+    const controller = new AbortController();
+    fetchSessions(controller.signal);
+    return () => controller.abort("Attendance page unmount or filter change");
   }, [fetchSessions]);
 
   // ── Fetch students + records when a session is expanded ──────────────────
@@ -299,28 +404,69 @@ function AttendancePage() {
     const session = sessions.find((s) => s.id === expandedSessionId);
     if (!session) return;
 
+    const linkedBatchId = resolveSessionBatchId(session);
+
+    if (!linkedBatchId) {
+      setExpandedStudents([]);
+      setExpandedRecords([]);
+      setSaveError(
+        "This session has no batch linked. Create a new session and select a batch to load students.",
+      );
+      setIsLoadingExpanded(false);
+      return;
+    }
+
+    if (isStaffUser && !staffAssignedBatchIds.includes(linkedBatchId)) {
+      setExpandedStudents([]);
+      setExpandedRecords([]);
+      setSaveError("You do not have access to this batch.");
+      setIsLoadingExpanded(false);
+      return;
+    }
+
     setIsLoadingExpanded(true);
     setSaveError(null);
 
+    const controller = new AbortController();
+
     Promise.all([
-      // Fetch students in this batch (pageSize=1000 to get all)
-      session.batch_id
-        ? searchStudents(instituteId, { batchId: session.batch_id }, 1, 1000)
-        : Promise.resolve({ success: true, data: { items: [] }, error: null }),
-      // Fetch existing attendance records for this session
+      getBatchStudents(linkedBatchId, instituteId),
       getSessionWithRecords(expandedSessionId),
-    ]).then(([studentsResult, sessionResult]) => {
-      if (studentsResult.success && studentsResult.data) {
-        setExpandedStudents(studentsResult.data.items);
-      }
+    ])
+      .then(([studentsResult, sessionResult]) => {
+        if (studentsResult.error === "Aborted") return;
 
-      if (sessionResult.success && sessionResult.data) {
-        setExpandedRecords(sessionResult.data.records);
-      }
+        if (import.meta.env.DEV) {
+          console.debug("[attendance] batch students", {
+            sessionId: session.id,
+            batchId: linkedBatchId,
+            batchFromEmbed: session.batch?.id,
+            batchIdColumn: session.batch_id,
+            count: studentsResult.data?.length,
+            error: studentsResult.error,
+          });
+        }
 
-      setIsLoadingExpanded(false);
-    });
-  }, [expandedSessionId, sessions, instituteId]);
+        if (studentsResult.success && studentsResult.data) {
+          setExpandedStudents(studentsResult.data);
+        }
+
+        if (sessionResult.success && sessionResult.data) {
+          setExpandedRecords(sessionResult.data.records);
+        }
+
+        setIsLoadingExpanded(false);
+      })
+      .catch((err) => {
+        if (!isAbortError(err)) {
+          console.error("[attendance] expand fetch failed:", err);
+          setSaveError(err instanceof Error ? err.message : "Failed to load session details.");
+        }
+        setIsLoadingExpanded(false);
+      });
+
+    return () => controller.abort("Expanded session closed or changed");
+  }, [expandedSessionId, sessions, instituteId, isStaffUser, staffAssignedBatchIds]);
 
   // ── Fetch report summaries ────────────────────────────────────────────────
   useEffect(() => {
@@ -383,7 +529,14 @@ function AttendancePage() {
       payload: debugRows,
     });
 
-    const result = await bulkMarkAttendance(expandedSessionId, instituteId, user.id, records);
+    const session = sessions.find((s) => s.id === expandedSessionId);
+    const result = await bulkMarkAttendance(
+      expandedSessionId,
+      instituteId,
+      user.id,
+      records,
+      session?.batch_id,
+    );
 
     if (!result.success) {
       setSaveError(result.error ?? "Failed to save attendance.");

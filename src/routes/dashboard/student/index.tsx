@@ -17,6 +17,8 @@ import { useStudentDashboardStore } from "@/store/studentDashboardStore";
 import type { AttendanceStatus, StudentAttendanceRecord, StudentFee } from "@/types";
 import { AlertCircle, RefreshCw, Sparkles } from "lucide-react";
 import { FeeStatusBadge } from "@/modules/fees/components/FeeStatusBadge";
+import { SchedulePortalView } from "@/modules/schedule/components/SchedulePortalView";
+import { getSchedulesByBatch } from "@/services/schedule.service";
 
 export const Route = createFileRoute("/dashboard/student/")({
   head: () => ({ meta: [{ title: "Student Dashboard — EduOS" }] }),
@@ -43,6 +45,8 @@ function StudentDashboard() {
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
+  const DASHBOARD_CACHE_MS = 60_000;
+
   useEffect(() => {
     if (!user?.id) {
       return;
@@ -50,6 +54,16 @@ function StudentDashboard() {
 
     if (!user.institute_id) {
       setError("Student session is missing the linked institute.");
+      setLoading(false);
+      return;
+    }
+
+    if (
+      dashboard &&
+      cachedStudentId === user.id &&
+      lastUpdated &&
+      Date.now() - new Date(lastUpdated).getTime() < DASHBOARD_CACHE_MS
+    ) {
       setLoading(false);
       return;
     }
@@ -94,7 +108,16 @@ function StudentDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [setDashboard, setError, setLoading, user?.id, user?.institute_id]);
+  }, [
+    setDashboard,
+    setError,
+    setLoading,
+    user?.id,
+    user?.institute_id,
+    dashboard,
+    cachedStudentId,
+    lastUpdated,
+  ]);
 
   const activeDashboard = dashboard && cachedStudentId === user?.id ? dashboard : null;
   const attendanceRecords = activeDashboard?.history ?? [];
@@ -264,6 +287,17 @@ function StudentDashboard() {
               />
               <BatchInfoCard batch={activeDashboard.batch} />
             </div>
+
+            {activeDashboard.batch?.id ? (
+              <SchedulePortalView
+                title="Class timetable"
+                subtitle={activeDashboard.batch.name}
+                batchId={activeDashboard.batch.id}
+                loadSchedules={() =>
+                  getSchedulesByBatch(activeDashboard.batch!.id, true)
+                }
+              />
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-4">
               <FeeStatCard label="Total fees" value={`₹${feeTotals.total.toLocaleString("en-IN")}`} />

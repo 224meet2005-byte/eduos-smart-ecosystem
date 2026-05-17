@@ -21,12 +21,17 @@ import { Route as DashboardSuperAdminIndexRouteImport } from './routes/dashboard
 import { Route as DashboardStudentIndexRouteImport } from './routes/dashboard/student/index'
 import { Route as DashboardStaffIndexRouteImport } from './routes/dashboard/staff/index'
 import { Route as DashboardParentIndexRouteImport } from './routes/dashboard/parent/index'
+import { Route as DashboardAnalyticsIndexRouteImport } from './routes/dashboard/analytics/index'
 import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard/admin/index'
+import { Route as DashboardStaffStudentsIndexRouteImport } from './routes/dashboard/staff/students/index'
 import { Route as DashboardAdminStudentsIndexRouteImport } from './routes/dashboard/admin/students/index'
+import { Route as DashboardAdminStaffIndexRouteImport } from './routes/dashboard/admin/staff/index'
+import { Route as DashboardAdminScheduleIndexRouteImport } from './routes/dashboard/admin/schedule/index'
 import { Route as DashboardAdminParentsIndexRouteImport } from './routes/dashboard/admin/parents/index'
 import { Route as DashboardAdminFeesIndexRouteImport } from './routes/dashboard/admin/fees/index'
 import { Route as DashboardAdminBatchesIndexRouteImport } from './routes/dashboard/admin/batches/index'
 import { Route as DashboardAdminAttendanceIndexRouteImport } from './routes/dashboard/admin/attendance/index'
+import { Route as DashboardStaffStudentsStudentIdRouteImport } from './routes/dashboard/staff/students/$studentId'
 import { Route as DashboardAdminStudentsStudentIdRouteImport } from './routes/dashboard/admin/students/$studentId'
 
 const UnauthorizedRoute = UnauthorizedRouteImport.update({
@@ -90,15 +95,38 @@ const DashboardParentIndexRoute = DashboardParentIndexRouteImport.update({
   path: '/parent/',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardAnalyticsIndexRoute = DashboardAnalyticsIndexRouteImport.update({
+  id: '/analytics/',
+  path: '/analytics/',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardAdminIndexRoute = DashboardAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardStaffStudentsIndexRoute =
+  DashboardStaffStudentsIndexRouteImport.update({
+    id: '/staff/students/',
+    path: '/staff/students/',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 const DashboardAdminStudentsIndexRoute =
   DashboardAdminStudentsIndexRouteImport.update({
     id: '/admin/students/',
     path: '/admin/students/',
+    getParentRoute: () => DashboardRoute,
+  } as any)
+const DashboardAdminStaffIndexRoute =
+  DashboardAdminStaffIndexRouteImport.update({
+    id: '/admin/staff/',
+    path: '/admin/staff/',
+    getParentRoute: () => DashboardRoute,
+  } as any)
+const DashboardAdminScheduleIndexRoute =
+  DashboardAdminScheduleIndexRouteImport.update({
+    id: '/admin/schedule/',
+    path: '/admin/schedule/',
     getParentRoute: () => DashboardRoute,
   } as any)
 const DashboardAdminParentsIndexRoute =
@@ -124,6 +152,12 @@ const DashboardAdminAttendanceIndexRoute =
     path: '/admin/attendance/',
     getParentRoute: () => DashboardRoute,
   } as any)
+const DashboardStaffStudentsStudentIdRoute =
+  DashboardStaffStudentsStudentIdRouteImport.update({
+    id: '/staff/students/$studentId',
+    path: '/staff/students/$studentId',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 const DashboardAdminStudentsStudentIdRoute =
   DashboardAdminStudentsStudentIdRouteImport.update({
     id: '/admin/students/$studentId',
@@ -141,16 +175,21 @@ export interface FileRoutesByFullPath {
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/analytics/': typeof DashboardAnalyticsIndexRoute
   '/dashboard/parent/': typeof DashboardParentIndexRoute
   '/dashboard/staff/': typeof DashboardStaffIndexRoute
   '/dashboard/student/': typeof DashboardStudentIndexRoute
   '/dashboard/super-admin/': typeof DashboardSuperAdminIndexRoute
   '/dashboard/admin/students/$studentId': typeof DashboardAdminStudentsStudentIdRoute
+  '/dashboard/staff/students/$studentId': typeof DashboardStaffStudentsStudentIdRoute
   '/dashboard/admin/attendance/': typeof DashboardAdminAttendanceIndexRoute
   '/dashboard/admin/batches/': typeof DashboardAdminBatchesIndexRoute
   '/dashboard/admin/fees/': typeof DashboardAdminFeesIndexRoute
   '/dashboard/admin/parents/': typeof DashboardAdminParentsIndexRoute
+  '/dashboard/admin/schedule/': typeof DashboardAdminScheduleIndexRoute
+  '/dashboard/admin/staff/': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students/': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/staff/students/': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -161,16 +200,21 @@ export interface FileRoutesByTo {
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
+  '/dashboard/analytics': typeof DashboardAnalyticsIndexRoute
   '/dashboard/parent': typeof DashboardParentIndexRoute
   '/dashboard/staff': typeof DashboardStaffIndexRoute
   '/dashboard/student': typeof DashboardStudentIndexRoute
   '/dashboard/super-admin': typeof DashboardSuperAdminIndexRoute
   '/dashboard/admin/students/$studentId': typeof DashboardAdminStudentsStudentIdRoute
+  '/dashboard/staff/students/$studentId': typeof DashboardStaffStudentsStudentIdRoute
   '/dashboard/admin/attendance': typeof DashboardAdminAttendanceIndexRoute
   '/dashboard/admin/batches': typeof DashboardAdminBatchesIndexRoute
   '/dashboard/admin/fees': typeof DashboardAdminFeesIndexRoute
   '/dashboard/admin/parents': typeof DashboardAdminParentsIndexRoute
+  '/dashboard/admin/schedule': typeof DashboardAdminScheduleIndexRoute
+  '/dashboard/admin/staff': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/staff/students': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -183,16 +227,21 @@ export interface FileRoutesById {
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/analytics/': typeof DashboardAnalyticsIndexRoute
   '/dashboard/parent/': typeof DashboardParentIndexRoute
   '/dashboard/staff/': typeof DashboardStaffIndexRoute
   '/dashboard/student/': typeof DashboardStudentIndexRoute
   '/dashboard/super-admin/': typeof DashboardSuperAdminIndexRoute
   '/dashboard/admin/students/$studentId': typeof DashboardAdminStudentsStudentIdRoute
+  '/dashboard/staff/students/$studentId': typeof DashboardStaffStudentsStudentIdRoute
   '/dashboard/admin/attendance/': typeof DashboardAdminAttendanceIndexRoute
   '/dashboard/admin/batches/': typeof DashboardAdminBatchesIndexRoute
   '/dashboard/admin/fees/': typeof DashboardAdminFeesIndexRoute
   '/dashboard/admin/parents/': typeof DashboardAdminParentsIndexRoute
+  '/dashboard/admin/schedule/': typeof DashboardAdminScheduleIndexRoute
+  '/dashboard/admin/staff/': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students/': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/staff/students/': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -206,16 +255,21 @@ export interface FileRouteTypes {
     | '/auth/update-password'
     | '/dashboard/'
     | '/dashboard/admin/'
+    | '/dashboard/analytics/'
     | '/dashboard/parent/'
     | '/dashboard/staff/'
     | '/dashboard/student/'
     | '/dashboard/super-admin/'
     | '/dashboard/admin/students/$studentId'
+    | '/dashboard/staff/students/$studentId'
     | '/dashboard/admin/attendance/'
     | '/dashboard/admin/batches/'
     | '/dashboard/admin/fees/'
     | '/dashboard/admin/parents/'
+    | '/dashboard/admin/schedule/'
+    | '/dashboard/admin/staff/'
     | '/dashboard/admin/students/'
+    | '/dashboard/staff/students/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -226,16 +280,21 @@ export interface FileRouteTypes {
     | '/auth/update-password'
     | '/dashboard'
     | '/dashboard/admin'
+    | '/dashboard/analytics'
     | '/dashboard/parent'
     | '/dashboard/staff'
     | '/dashboard/student'
     | '/dashboard/super-admin'
     | '/dashboard/admin/students/$studentId'
+    | '/dashboard/staff/students/$studentId'
     | '/dashboard/admin/attendance'
     | '/dashboard/admin/batches'
     | '/dashboard/admin/fees'
     | '/dashboard/admin/parents'
+    | '/dashboard/admin/schedule'
+    | '/dashboard/admin/staff'
     | '/dashboard/admin/students'
+    | '/dashboard/staff/students'
   id:
     | '__root__'
     | '/'
@@ -247,16 +306,21 @@ export interface FileRouteTypes {
     | '/auth/update-password'
     | '/dashboard/'
     | '/dashboard/admin/'
+    | '/dashboard/analytics/'
     | '/dashboard/parent/'
     | '/dashboard/staff/'
     | '/dashboard/student/'
     | '/dashboard/super-admin/'
     | '/dashboard/admin/students/$studentId'
+    | '/dashboard/staff/students/$studentId'
     | '/dashboard/admin/attendance/'
     | '/dashboard/admin/batches/'
     | '/dashboard/admin/fees/'
     | '/dashboard/admin/parents/'
+    | '/dashboard/admin/schedule/'
+    | '/dashboard/admin/staff/'
     | '/dashboard/admin/students/'
+    | '/dashboard/staff/students/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -355,6 +419,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardParentIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/analytics/': {
+      id: '/dashboard/analytics/'
+      path: '/analytics'
+      fullPath: '/dashboard/analytics/'
+      preLoaderRoute: typeof DashboardAnalyticsIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/admin/': {
       id: '/dashboard/admin/'
       path: '/admin'
@@ -362,11 +433,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/staff/students/': {
+      id: '/dashboard/staff/students/'
+      path: '/staff/students'
+      fullPath: '/dashboard/staff/students/'
+      preLoaderRoute: typeof DashboardStaffStudentsIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/admin/students/': {
       id: '/dashboard/admin/students/'
       path: '/admin/students'
       fullPath: '/dashboard/admin/students/'
       preLoaderRoute: typeof DashboardAdminStudentsIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/admin/staff/': {
+      id: '/dashboard/admin/staff/'
+      path: '/admin/staff'
+      fullPath: '/dashboard/admin/staff/'
+      preLoaderRoute: typeof DashboardAdminStaffIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/admin/schedule/': {
+      id: '/dashboard/admin/schedule/'
+      path: '/admin/schedule'
+      fullPath: '/dashboard/admin/schedule/'
+      preLoaderRoute: typeof DashboardAdminScheduleIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/admin/parents/': {
@@ -397,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminAttendanceIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/staff/students/$studentId': {
+      id: '/dashboard/staff/students/$studentId'
+      path: '/staff/students/$studentId'
+      fullPath: '/dashboard/staff/students/$studentId'
+      preLoaderRoute: typeof DashboardStaffStudentsStudentIdRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/admin/students/$studentId': {
       id: '/dashboard/admin/students/$studentId'
       path: '/admin/students/$studentId'
@@ -410,31 +509,41 @@ declare module '@tanstack/react-router' {
 interface DashboardRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
+  DashboardAnalyticsIndexRoute: typeof DashboardAnalyticsIndexRoute
   DashboardParentIndexRoute: typeof DashboardParentIndexRoute
   DashboardStaffIndexRoute: typeof DashboardStaffIndexRoute
   DashboardStudentIndexRoute: typeof DashboardStudentIndexRoute
   DashboardSuperAdminIndexRoute: typeof DashboardSuperAdminIndexRoute
   DashboardAdminStudentsStudentIdRoute: typeof DashboardAdminStudentsStudentIdRoute
+  DashboardStaffStudentsStudentIdRoute: typeof DashboardStaffStudentsStudentIdRoute
   DashboardAdminAttendanceIndexRoute: typeof DashboardAdminAttendanceIndexRoute
   DashboardAdminBatchesIndexRoute: typeof DashboardAdminBatchesIndexRoute
   DashboardAdminFeesIndexRoute: typeof DashboardAdminFeesIndexRoute
   DashboardAdminParentsIndexRoute: typeof DashboardAdminParentsIndexRoute
+  DashboardAdminScheduleIndexRoute: typeof DashboardAdminScheduleIndexRoute
+  DashboardAdminStaffIndexRoute: typeof DashboardAdminStaffIndexRoute
   DashboardAdminStudentsIndexRoute: typeof DashboardAdminStudentsIndexRoute
+  DashboardStaffStudentsIndexRoute: typeof DashboardStaffStudentsIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
+  DashboardAnalyticsIndexRoute: DashboardAnalyticsIndexRoute,
   DashboardParentIndexRoute: DashboardParentIndexRoute,
   DashboardStaffIndexRoute: DashboardStaffIndexRoute,
   DashboardStudentIndexRoute: DashboardStudentIndexRoute,
   DashboardSuperAdminIndexRoute: DashboardSuperAdminIndexRoute,
   DashboardAdminStudentsStudentIdRoute: DashboardAdminStudentsStudentIdRoute,
+  DashboardStaffStudentsStudentIdRoute: DashboardStaffStudentsStudentIdRoute,
   DashboardAdminAttendanceIndexRoute: DashboardAdminAttendanceIndexRoute,
   DashboardAdminBatchesIndexRoute: DashboardAdminBatchesIndexRoute,
   DashboardAdminFeesIndexRoute: DashboardAdminFeesIndexRoute,
   DashboardAdminParentsIndexRoute: DashboardAdminParentsIndexRoute,
+  DashboardAdminScheduleIndexRoute: DashboardAdminScheduleIndexRoute,
+  DashboardAdminStaffIndexRoute: DashboardAdminStaffIndexRoute,
   DashboardAdminStudentsIndexRoute: DashboardAdminStudentsIndexRoute,
+  DashboardStaffStudentsIndexRoute: DashboardStaffStudentsIndexRoute,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(

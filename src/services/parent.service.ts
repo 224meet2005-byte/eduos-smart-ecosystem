@@ -19,7 +19,9 @@
 // Every function returns an ApiResponse<T> — never throws.
 // ---------------------------------------------------------------------------
 
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { generateTempPassword } from "@/utils/studentCredentials";
+import { getErrorMessage } from "@/utils/helpers";
 import type { Parent, StudentParent, ApiResponse } from "@/types";
 
 // ── Shared "not configured" error response ───────────────────────────────────
@@ -35,35 +37,46 @@ const SUPABASE_NOT_CONFIGURED = {
 
 /**
  * Return the parent profile linked to a Supabase auth user.
- * Called immediately after sign-in to hydrate parent-specific state.
+ * Optionally filters by institute_id to support multi-tenant parents.
  */
-export async function getParentByUserId(userId: string): Promise<ApiResponse<Parent>> {
+export async function getParentByUserId(
+  userId: string,
+  instituteId?: string,
+): Promise<ApiResponse<Parent>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("parents")
-    .select("*, user:users(*)")
-    .eq("user_id", userId)
-    .single();
+  let query = supabase.from("parents").select("*, user:users(*)").eq("user_id", userId);
+
+  if (instituteId) {
+    query = query.eq("institute_id", instituteId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
 
   if (error) return { data: null, error: error.message, success: false };
+  if (!data) return { data: null, error: "Parent profile not found.", success: false };
   return { data: data as Parent, error: null, success: true };
 }
 
 /**
- * Return all parents registered under a specific institute.
- * Used in the admin "Parents" management view.
+ * Fetch all parents for an institute.
  */
 export async function getParentsByInstitute(instituteId: string): Promise<ApiResponse<Parent[]>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("parents")
-    .select("*, user:users(*)")
-    .eq("institute_id", instituteId);
+  try {
+    const { data, error } = await supabase
+      .from("parents")
+      .select("id, user_id, occupation, created_at, user:users(id, name, email, phone, avatar_url)")
+      .eq("institute_id", instituteId);
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Parent[], error: null, success: true };
+    if (error) return { data: null, error: getErrorMessage(error), success: false };
+    return { data: data as Parent[], error: null, success: true };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load parents.");
+    console.error("[getParentsByInstitute] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }
 
 /**
@@ -336,43 +349,67 @@ export async function createParent(payload: {
 }
 
 /**
- * Get parent profile with linked children count and details.
- * Used in parent management pages to display parent information
- * with their student associations.
+ * Fetch a single parent by ID.
  */
-export async function getParentWithChildren(
-  parentId: string,
-): Promise<ApiResponse<Parent & { children_count: number }>> {
+export async function getParentById(id: string): Promise<ApiResponse<Parent & { children_count: number }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data: parentData, error: parentError } = await supabase
-    .from("parents")
-    .select("*, user:users(*)")
-    .eq("id", parentId)
-    .single();
+  try {
+    const { data: parentData, error: parentError } = await supabase
+      .from("parents")
+      .select("*, user:users(*)")
+      .eq("id", id)
+      .single();
 
-  if (parentError) return { data: null, error: parentError.message, success: false };
+    if (parentError) return { data: null, error: getErrorMessage(parentError), success: false };
 
-  const { data: childrenData, error: childrenError } = await supabase
-    .from("student_parents")
-    .select("id", { count: "exact" })
-    .eq("parent_id", parentId);
+    const { data: childrenData } = await supabase
+      .from("student_parents")
+      .select("student_id")
+      .eq("parent_id", id);
 
-  if (childrenError) {
-    // Non-fatal error — return parent without children count
     return {
-      data: { ...(parentData as Parent), children_count: 0 },
+      data: {
+        ...(parentData as Parent),
+        children_count: childrenData?.length ?? 0,
+      },
       error: null,
       success: true,
     };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to load parent details.");
+    console.error("[getParentById] exception:", err);
+    return { data: null, error: msg, success: false };
   }
+}
 
-  return {
-    data: {
-      ...(parentData as Parent),
-      children_count: childrenData?.length ?? 0,
-    },
-    error: null,
-    success: true,
-  };
+/**
+ * Reset a parent's password to a new auto-generated temporary password.
+ */
+export async function resetParentPassword(
+  userId: string,
+): Promise<ApiResponse<{ temporary_password: string }>> {
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
+
+  try {
+    const newPassword = generateTempPassword();
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (error) {
+      return { data: null, error: getErrorMessage(error), success: false };
+    }
+
+    return {
+      data: { temporary_password: newPassword },
+      error: null,
+      success: true,
+    };
+  } catch (err) {
+    const msg = getErrorMessage(err, "Failed to reset parent password.");
+    console.error("[resetParentPassword] exception:", err);
+    return { data: null, error: msg, success: false };
+  }
 }

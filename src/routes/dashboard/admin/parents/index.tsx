@@ -23,6 +23,11 @@ import {
   GraduationCap,
   Loader2,
   AlertCircle,
+  Key,
+  Eye,
+  RotateCcw,
+  Copy,
+  Check,
 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -31,10 +36,11 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuthStore } from "@/store/authStore";
-import { getParentsByInstitute } from "@/services/parent.service";
+import { getParentsByInstitute, resetParentPassword } from "@/services/parent.service";
 import { getStudentsByParentId } from "@/services/student.service";
 import type { Parent, RelationType, StudentLinkedForParent } from "@/types";
-import { getInitials, formatDate } from "@/utils/helpers";
+import { getInitials, formatDate, copyToClipboard } from "@/utils/helpers";
+import { toast } from "sonner";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -86,6 +92,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function ParentProfilePanel({ parent, isOpen, onClose }: ParentProfilePanelProps) {
   const [linkedStudents, setLinkedStudents] = useState<StudentLinkedForParent[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [isGeneratingFromView, setIsGeneratingFromView] = useState(false);
 
   // Fetch linked students whenever the panel opens for a new parent.
   const fetchLinkedStudents = useCallback(async (parentId: string) => {
@@ -102,10 +113,78 @@ function ParentProfilePanel({ parent, isOpen, onClose }: ParentProfilePanelProps
   useEffect(() => {
     if (isOpen && parent?.id) {
       fetchLinkedStudents(parent.id);
+      setNewPassword(null);
+      setIsViewing(false);
     } else {
       setLinkedStudents([]);
+      setNewPassword(null);
+      setIsViewing(false);
     }
   }, [isOpen, parent?.id, fetchLinkedStudents]);
+
+  async function handleResetPassword() {
+    if (!parent?.user_id) return;
+    const confirmed = window.confirm(
+      "Confirm password reset — this will immediately invalidate the existing password.",
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsResetting(true);
+      const result = await resetParentPassword(parent.user_id);
+      setIsResetting(false);
+
+      if (result.success && result.data) {
+        setNewPassword(result.data.temporary_password);
+        setIsViewing(true);
+        toast.success("Password reset successfully");
+      } else {
+        toast.error(result.error ?? "Failed to reset password");
+      }
+    } catch (err) {
+      setIsResetting(false);
+      toast.error((err as Error).message ?? "Failed to reset password");
+    }
+  }
+
+  async function handleViewPassword() {
+    if (!parent?.user_id) return;
+
+    if (newPassword) {
+      setIsViewing(true);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "No temporary password is currently available to view. Generate a new temporary password now?",
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsGeneratingFromView(true);
+      const result = await resetParentPassword(parent.user_id);
+      setIsGeneratingFromView(false);
+      if (result.success && result.data) {
+        setNewPassword(result.data.temporary_password);
+        setIsViewing(true);
+        toast.success("Temporary password generated");
+      } else {
+        toast.error(result.error ?? "Failed to generate temporary password");
+      }
+    } catch (err) {
+      setIsGeneratingFromView(false);
+      toast.error((err as Error).message ?? "Failed to generate temporary password");
+    }
+  }
+
+  async function handleCopyPassword() {
+    if (!newPassword) return;
+    if (await copyToClipboard(newPassword)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Password copied to clipboard");
+    }
+  }
 
   // Close on Escape key.
   useEffect(() => {
@@ -176,6 +255,59 @@ function ParentProfilePanel({ parent, isOpen, onClose }: ParentProfilePanelProps
             <InfoRow icon={<Phone />} label="Phone" value={parent.user?.phone ?? "—"} />
             <InfoRow icon={<Briefcase />} label="Occupation" value={parent.occupation ?? "—"} />
             <InfoRow icon={<Calendar />} label="Joined" value={formatDate(parent.created_at)} />
+          </div>
+
+          {/* Account Credentials Section */}
+          <SectionLabel>Account Credentials</SectionLabel>
+          <div className="px-5 py-4 space-y-3">
+            <div className="rounded-lg border border-border bg-muted/20 p-3">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 tracking-tight">Sign-in Email</p>
+              <p className="text-sm font-mono text-foreground break-all bg-background border border-border rounded px-2 py-1">
+                {parent.user?.email ?? "—"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleViewPassword}
+                  disabled={isViewing || isGeneratingFromView}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {isGeneratingFromView ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                  View Password
+                </button>
+
+                <button
+                  onClick={handleResetPassword}
+                  disabled={isResetting}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Reset
+                </button>
+              </div>
+
+              {newPassword && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium text-primary uppercase">Temporary Password</span>
+                    </div>
+                    <button onClick={handleCopyPassword} className="p-1 hover:bg-primary/10 rounded transition-colors">
+                      {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5 text-primary" />}
+                    </button>
+                  </div>
+                  <p className="text-sm font-mono font-bold text-foreground bg-background border border-primary/20 rounded px-2 py-1.5">
+                    {newPassword}
+                  </p>
+                  <p className="mt-2 text-[10px] text-primary/70 leading-tight">
+                    Share this password with the parent. It will not be shown again once you close this panel.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Linked students */}

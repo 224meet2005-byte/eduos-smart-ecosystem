@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { ThemeProvider, themeNoFlashScript } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { getErrorMessage } from "@/utils/helpers";
 
 function NotFoundComponent() {
   return (
@@ -36,7 +37,8 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  const message = getErrorMessage(error);
+  if (import.meta.env.DEV) console.error(error);
   const router = useRouter();
 
   return (
@@ -45,9 +47,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
