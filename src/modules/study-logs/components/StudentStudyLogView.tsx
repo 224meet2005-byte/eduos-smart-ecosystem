@@ -28,17 +28,33 @@ interface StudentStudyLogViewProps {
   studentId: string;
   batchId: string; // This is the student's PRIMARY batch
   instituteId: string;
+  assignments?: StudentBatchAssignment[];
 }
 
-export function StudentStudyLogView({ studentId, batchId: primaryBatchId, instituteId }: StudentStudyLogViewProps) {
+export function StudentStudyLogView({ 
+  studentId, 
+  batchId: primaryBatchId, 
+  instituteId,
+  assignments = [] 
+}: StudentStudyLogViewProps) {
   const [logs, setLogs] = useState<DailyStudyLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(format(startOfToday(), "yyyy-MM-dd"));
   
-  // For now, we use the primary batch. In a full many-to-many system, we'd fetch all assigned batches.
-  // The system architecture is now ready for multiple batches.
-  const [selectedBatchId, setSelectedBatchId] = useState<string>(primaryBatchId);
+  // Use assignments if available, fallback to primary batch
+  const allBatches = useMemo(() => {
+    if (assignments.length > 0) {
+      return assignments.map(a => ({
+        id: a.batch_id,
+        name: a.batch?.name || "Unknown Batch",
+        courseName: a.course?.name || "Unknown Course"
+      }));
+    }
+    return [{ id: primaryBatchId, name: "Primary Batch", courseName: "Course" }];
+  }, [assignments, primaryBatchId]);
+
+  const [selectedBatchId, setSelectedBatchId] = useState<string>(allBatches[0]?.id || primaryBatchId);
 
   const fetchLogs = useCallback(async () => {
     if (!selectedBatchId) return;
@@ -86,8 +102,11 @@ export function StudentStudyLogView({ studentId, batchId: primaryBatchId, instit
                     <SelectValue placeholder="Choose a batch" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value={primaryBatchId}>Primary Batch</SelectItem>
-                    {/* In future: map through student.batches for many-to-many */}
+                    {allBatches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>
+                            {b.courseName} ({b.name})
+                        </SelectItem>
+                    ))}
                 </SelectContent>
             </Select>
         </div>

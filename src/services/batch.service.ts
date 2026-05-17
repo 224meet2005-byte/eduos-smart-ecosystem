@@ -240,8 +240,22 @@ export type StudentForBatchAssignment = Student & {
 const STUDENT_ASSIGNMENT_SELECT =
   "id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone)";
 
-function isSchemaRelationshipError(message: string): boolean {
-  return /relationship|schema cache|PGRST200/i.test(message);
+/** Transfer a student to a new batch within the same course. */
+export async function transferStudentBatch(
+  studentId: string,
+  newBatchId: string,
+  assignedBy: string,
+): Promise<ApiResponse<{ success: boolean; new_batch_id: string }>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase.rpc("transfer_student_batch", {
+    p_student_id: studentId,
+    p_new_batch_id: newBatchId,
+    p_assigned_by: assignedBy,
+  });
+
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
+  return { data: data as { success: boolean; new_batch_id: string }, error: null, success: true };
 }
 
 /** Merge batch names without PostgREST embed (works when FK is not yet in schema cache). */
@@ -408,22 +422,46 @@ export async function restoreBatch(id: string): Promise<ApiResponse<Batch>> {
   return updateBatch(id, { is_active: true });
 }
 
-/** Assign a single student to a batch. */
+/** Assign a student to a batch. Now uses student_batch_assignments. */
 export async function assignStudentToBatch(
   studentId: string,
   batchId: string,
-): Promise<ApiResponse<Student>> {
+  instituteId: string,
+  assignedBy: string,
+): Promise<ApiResponse<void>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("students")
-    .update({ batch_id: batchId })
-    .eq("id", studentId)
-    .select("*, user:users(id, name, email, phone, role, is_active)")
+  // 1. Get the course_id for the target batch
+  const { data: batchData, error: batchError } = await supabase
+    .from("batches")
+    .select("course_id")
+    .eq("id", batchId)
     .single();
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Student, error: null, success: true };
+  if (batchError || !batchData?.course_id) {
+    return { data: null, error: "Target batch is not linked to a course.", success: false };
+  }
+
+  // 2. Perform assignment in the junction table
+  const { error } = await supabase
+    .from("student_batch_assignments")
+    .upsert({
+      student_id: studentId,
+      batch_id: batchId,
+      course_id: batchData.course_id,
+      institute_id: instituteId,
+      assigned_by: assignedBy,
+      is_active: true
+    }, { onConflict: "student_id,course_id" });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { data: null, error: "Student is already assigned to a batch for this course.", success: false };
+    }
+    return { data: null, error: getErrorMessage(error), success: false };
+  }
+
+  return { data: undefined, error: null, success: true };
 }
 
 /** Remove a student from their current batch. */

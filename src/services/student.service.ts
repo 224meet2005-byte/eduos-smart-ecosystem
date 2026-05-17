@@ -274,7 +274,15 @@ export async function getStudentByUserId(userId: string): Promise<ApiResponse<St
   try {
     const { data, error } = await supabase
       .from("students")
-      .select("id, user_id, admission_no, status, created_at, batch_id, institute_id, user:users(id, name, email, phone, avatar_url, role, is_active)")
+      .select(`
+        id, user_id, admission_no, status, created_at, batch_id, institute_id, 
+        user:users(id, name, email, phone, avatar_url, role, is_active),
+        assignments:student_batch_assignments(
+          id, batch_id, course_id, is_active, 
+          batch:batches(id, name),
+          course:courses(id, name)
+        )
+      `)
       .eq("user_id", userId)
       .single();
 

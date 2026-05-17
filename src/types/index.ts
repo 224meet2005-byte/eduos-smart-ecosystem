@@ -66,6 +66,18 @@ export interface Institute {
   updated_at: string;
 }
 
+export interface StudentBatchAssignment {
+  id: string;
+  student_id: string;
+  batch_id: string;
+  course_id: string;
+  institute_id: string;
+  is_active: boolean;
+  assigned_at: string;
+  batch?: Batch;
+  course?: Course;
+}
+
 /** Row in the `students` table. */
 export interface Student {
   id: string;
@@ -88,6 +100,7 @@ export interface Student {
   // Joined relations (populated when select includes `user:users(*)`)
   user?: User;
   batch?: Batch;
+  assignments?: StudentBatchAssignment[];
 }
 
 /** Row in the `parents` table. */
@@ -264,6 +277,7 @@ export interface PasswordUpdateFormData {
 export interface Batch {
   id: string;
   institute_id: string;
+  course_id?: string | null;
   name: string;
   academic_year: string;
   description: string | null;
@@ -279,6 +293,7 @@ export interface Batch {
   updated_at: string;
   // Computed
   student_count?: number;
+  course?: Course;
 }
 
 export interface CreateBatchPayload {

@@ -423,6 +423,7 @@ function StudentDashboard() {
                     studentId={activeDashboard.student.id}
                     batchId={activeDashboard.student.batch_id || ""}
                     instituteId={user?.institute_id || activeDashboard.student.institute_id}
+                    assignments={activeDashboard.student.assignments}
                 />
             )}
             <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Page {pageLabel}</p>
