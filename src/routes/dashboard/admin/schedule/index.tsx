@@ -55,6 +55,7 @@ const INPUT_CLASS =
 function AdminSchedulePage() {
   const { user } = useAuthStore();
   const instituteId = user?.institute_id ?? "";
+  const canManageSchedule = user?.role === "admin" || user?.role === "super_admin";
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -265,11 +266,18 @@ function AdminSchedulePage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={["admin"]}>
+    <ProtectedRoute allowedRoles={["admin", "staff", "super_admin"]}>
       <PageHeader
         title="Schedule Management"
         description="Create timetables, assign teachers and rooms, detect conflicts, and publish schedules."
       />
+
+      {!canManageSchedule && (
+        <div className="mb-6 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          You are viewing schedule in read-only mode. Editing, publishing, and setup actions are
+          available to admins only.
+        </div>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2">
         <select
@@ -323,53 +331,55 @@ function AdminSchedulePage() {
         </button>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setEditing(null);
-            setFormError(null);
-            setModalOpen(true);
-          }}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add slot
-        </button>
-        <button
-          type="button"
-          onClick={() => void handlePublish()}
-          disabled={!selectedBatchId}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" />
-          Publish batch
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleDuplicate()}
-          disabled={!selectedBatchId}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-        >
-          <Copy className="h-4 w-4" />
-          Duplicate week
-        </button>
-        <button
-          type="button"
-          onClick={handleExport}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-        >
-          <Download className="h-4 w-4" />
-          Export CSV
-        </button>
-      </div>
+      {canManageSchedule && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setFormError(null);
+              setModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Add slot
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePublish()}
+            disabled={!selectedBatchId}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            Publish batch
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDuplicate()}
+            disabled={!selectedBatchId}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            <Copy className="h-4 w-4" />
+            Duplicate week
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
+        </div>
+      )}
 
-      <Tabs defaultValue="week">
+      <Tabs defaultValue={canManageSchedule ? "week" : "today"}>
         <TabsList>
           <TabsTrigger value="week">Weekly grid</TabsTrigger>
           <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="setup">Rooms & subjects</TabsTrigger>
-          <TabsTrigger value="exceptions">Holidays & events</TabsTrigger>
+          {canManageSchedule && <TabsTrigger value="setup">Rooms & subjects</TabsTrigger>}
+          {canManageSchedule && <TabsTrigger value="exceptions">Holidays & events</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="week" className="mt-4 space-y-4">
@@ -401,130 +411,138 @@ function AdminSchedulePage() {
           <DailyScheduleView schedules={filteredToday} />
         </TabsContent>
 
-        <TabsContent value="setup" className="mt-4 grid gap-6 lg:grid-cols-2">
-          <SetupPanel title="Subjects">
-            <div className="flex gap-2">
-              <input
-                value={newSubject}
-                onChange={(e) => setNewSubject(e.target.value)}
-                placeholder="New subject name"
-                className={INPUT_CLASS}
-              />
-              <button
-                type="button"
-                onClick={() => void handleAddSubject()}
-                className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-              >
-                Add
-              </button>
-            </div>
-            <ul className="mt-3 space-y-1 text-sm">
-              {subjects.map((s) => (
-                <li key={s.id} className="rounded-lg bg-muted/30 px-3 py-2">
-                  {s.name}
-                </li>
-              ))}
-            </ul>
-          </SetupPanel>
-          <SetupPanel title="Rooms">
-            <div className="flex gap-2">
-              <input
-                value={newRoom}
-                onChange={(e) => setNewRoom(e.target.value)}
-                placeholder="Room name"
-                className={INPUT_CLASS}
-              />
-              <button
-                type="button"
-                onClick={() => void handleAddRoom()}
-                className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-              >
-                Add
-              </button>
-            </div>
-            <ul className="mt-3 space-y-1 text-sm">
-              {rooms.map((r) => (
-                <li key={r.id} className="rounded-lg bg-muted/30 px-3 py-2">
-                  {r.room_name}
-                  {r.building && <span className="text-muted-foreground"> · {r.building}</span>}
-                </li>
-              ))}
-            </ul>
-          </SetupPanel>
-        </TabsContent>
-
-        <TabsContent value="exceptions" className="mt-4">
-          <div className="rounded-2xl border border-border bg-card p-5 max-w-xl">
-            <h3 className="text-sm font-bold uppercase tracking-wider mb-4">Add holiday / block</h3>
-            <div className="space-y-3">
-              <input
-                type="date"
-                value={newExceptionDate}
-                onChange={(e) => setNewExceptionDate(e.target.value)}
-                className={INPUT_CLASS}
-              />
-              <input
-                value={newExceptionTitle}
-                onChange={(e) => setNewExceptionTitle(e.target.value)}
-                placeholder="Title (e.g. Republic Day)"
-                className={INPUT_CLASS}
-              />
-              <button
-                type="button"
-                onClick={() => void handleAddException()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
-              >
-                Add exception
-              </button>
-            </div>
-          </div>
-          <ul className="mt-6 space-y-2">
-            {exceptions.map((ex) => (
-              <li
-                key={ex.id}
-                className="flex items-center justify-between rounded-lg border border-border px-4 py-3 text-sm"
-              >
-                <div>
-                  <span className="font-medium">{ex.title}</span>
-                  <span className="text-muted-foreground ml-2">{ex.exception_date}</span>
-                  <span className="ml-2 capitalize text-xs text-muted-foreground">{ex.type}</span>
-                </div>
+        {canManageSchedule && (
+          <TabsContent value="setup" className="mt-4 grid gap-6 lg:grid-cols-2">
+            <SetupPanel title="Subjects">
+              <div className="flex gap-2">
+                <input
+                  value={newSubject}
+                  onChange={(e) => setNewSubject(e.target.value)}
+                  placeholder="New subject name"
+                  className={INPUT_CLASS}
+                />
                 <button
                   type="button"
-                  onClick={async () => {
-                    const r = await deleteScheduleException(ex.id);
-                    if (r.success) {
-                      toast.success("Removed");
-                      void loadSchedules();
-                    }
-                  }}
-                  className="text-xs text-destructive hover:underline"
+                  onClick={() => void handleAddSubject()}
+                  className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
                 >
-                  Remove
+                  Add
                 </button>
-              </li>
-            ))}
-          </ul>
-        </TabsContent>
+              </div>
+              <ul className="mt-3 space-y-1 text-sm">
+                {subjects.map((s) => (
+                  <li key={s.id} className="rounded-lg bg-muted/30 px-3 py-2">
+                    {s.name}
+                  </li>
+                ))}
+              </ul>
+            </SetupPanel>
+            <SetupPanel title="Rooms">
+              <div className="flex gap-2">
+                <input
+                  value={newRoom}
+                  onChange={(e) => setNewRoom(e.target.value)}
+                  placeholder="Room name"
+                  className={INPUT_CLASS}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAddRoom()}
+                  className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                >
+                  Add
+                </button>
+              </div>
+              <ul className="mt-3 space-y-1 text-sm">
+                {rooms.map((r) => (
+                  <li key={r.id} className="rounded-lg bg-muted/30 px-3 py-2">
+                    {r.room_name}
+                    {r.building && <span className="text-muted-foreground"> · {r.building}</span>}
+                  </li>
+                ))}
+              </ul>
+            </SetupPanel>
+          </TabsContent>
+        )}
+
+        {canManageSchedule && (
+          <TabsContent value="exceptions" className="mt-4">
+            <div className="rounded-2xl border border-border bg-card p-5 max-w-xl">
+              <h3 className="mb-4 text-sm font-bold uppercase tracking-wider">
+                Add holiday / block
+              </h3>
+              <div className="space-y-3">
+                <input
+                  type="date"
+                  value={newExceptionDate}
+                  onChange={(e) => setNewExceptionDate(e.target.value)}
+                  className={INPUT_CLASS}
+                />
+                <input
+                  value={newExceptionTitle}
+                  onChange={(e) => setNewExceptionTitle(e.target.value)}
+                  placeholder="Title (e.g. Republic Day)"
+                  className={INPUT_CLASS}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAddException()}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
+                >
+                  Add exception
+                </button>
+              </div>
+            </div>
+            <ul className="mt-6 space-y-2">
+              {exceptions.map((ex) => (
+                <li
+                  key={ex.id}
+                  className="flex items-center justify-between rounded-lg border border-border px-4 py-3 text-sm"
+                >
+                  <div>
+                    <span className="font-medium">{ex.title}</span>
+                    <span className="text-muted-foreground ml-2">{ex.exception_date}</span>
+                    <span className="ml-2 capitalize text-xs text-muted-foreground">{ex.type}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const r = await deleteScheduleException(ex.id);
+                      if (r.success) {
+                        toast.success("Removed");
+                        void loadSchedules();
+                      }
+                    }}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </TabsContent>
+        )}
       </Tabs>
 
-      <ScheduleSlotFormModal
-        open={modalOpen}
-        editing={editing}
-        batches={batches}
-        subjects={subjects}
-        rooms={rooms}
-        staff={staff}
-        sections={sections}
-        isSubmitting={isSubmitting}
-        serverError={formError}
-        onClose={() => {
-          setModalOpen(false);
-          setEditing(null);
-        }}
-        onSubmit={handleSlotSubmit}
-        onBatchChange={(id) => void handleBatchChange(id)}
-      />
+      {canManageSchedule && (
+        <ScheduleSlotFormModal
+          open={modalOpen}
+          editing={editing}
+          batches={batches}
+          subjects={subjects}
+          rooms={rooms}
+          staff={staff}
+          sections={sections}
+          isSubmitting={isSubmitting}
+          serverError={formError}
+          onClose={() => {
+            setModalOpen(false);
+            setEditing(null);
+          }}
+          onSubmit={handleSlotSubmit}
+          onBatchChange={(id) => void handleBatchChange(id)}
+        />
+      )}
     </ProtectedRoute>
   );
 }

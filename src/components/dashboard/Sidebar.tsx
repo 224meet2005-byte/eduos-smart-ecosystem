@@ -101,6 +101,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Overview",
         items: [
           { title: "Dashboard", url: "/dashboard/staff", icon: LayoutDashboard },
+          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
           {
             title: "Students",
             url: "/dashboard/staff/students",
