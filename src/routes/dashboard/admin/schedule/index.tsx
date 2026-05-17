@@ -52,6 +52,17 @@ export const Route = createFileRoute("/dashboard/admin/schedule/")({
 const INPUT_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20";
 
+function getBatchItems(data: unknown): Batch[] {
+  if (Array.isArray(data)) return data as Batch[];
+
+  if (data && typeof data === "object" && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items)) return items as Batch[];
+  }
+
+  return [];
+}
+
 function AdminSchedulePage() {
   const { user } = useAuthStore();
   const instituteId = user?.institute_id ?? "";
@@ -93,11 +104,14 @@ function AdminSchedulePage() {
       getStaffByInstitute(instituteId),
     ]);
     if (b.success && b.data) {
-      setBatches(b.data);
-      if (!initialBatchSet.current && b.data[0]) {
+      const batchItems = getBatchItems(b.data);
+      setBatches(batchItems);
+      if (!initialBatchSet.current && batchItems[0]) {
         initialBatchSet.current = true;
-        setSelectedBatchId(b.data[0].id);
+        setSelectedBatchId(batchItems[0].id);
       }
+    } else {
+      setBatches([]);
     }
     if (s.success && s.data) setSubjects(s.data);
     if (r.success && r.data) setRooms(r.data);
