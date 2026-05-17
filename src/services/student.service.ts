@@ -274,7 +274,7 @@ export async function getStudentByUserId(userId: string): Promise<ApiResponse<St
   try {
     const { data, error } = await supabase
       .from("students")
-      .select("id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url, role, is_active)")
+      .select("id, user_id, admission_no, status, created_at, batch_id, institute_id, user:users(id, name, email, phone, avatar_url, role, is_active)")
       .eq("user_id", userId)
       .single();
 
@@ -300,7 +300,7 @@ export async function getStudentsByParentId(
   try {
     const { data, error } = await supabase
       .from("student_parents")
-      .select("relation_type, student:students(id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url, role, is_active))")
+      .select("relation_type, student:students(id, admission_no, status, created_at, batch_id, institute_id, user:users(id, name, email, phone, avatar_url, role, is_active))")
       .eq("parent_id", parentId);
 
     if (error) return { data: null, error: getErrorMessage(error), success: false };
@@ -359,7 +359,7 @@ export async function searchStudents(
     // ── Step 1: Fetch the student rows (no count, no cross-table filter) ────
     let query = supabase
       .from("students")
-      .select("id, user_id, admission_no, status, created_at, batch_id, user:users(id, name, email, phone, avatar_url)")
+      .select("id, user_id, admission_no, status, created_at, batch_id, institute_id, user:users(id, name, email, phone, avatar_url)")
       .eq("institute_id", instituteId)
       .order("created_at", { ascending: false });
 

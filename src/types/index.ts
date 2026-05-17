@@ -604,6 +604,46 @@ export interface AttendanceTrendPoint {
   percentage: number;
 }
 
+// ── Daily Study Logs ──────────────────────────────────────────────────────────
+
+export interface DailyStudyLog {
+  id: string;
+  student_id: string;
+  batch_id: string;
+  institute_id: string;
+  title: string;
+  description: string;
+  attachment_url: string | null;
+  log_date: string;
+  submitted_at: string;
+  status: string;
+  is_late: boolean;
+  is_locked: boolean;
+  created_at: string;
+}
+
+export interface StudentStudyLogReport {
+  student_id: string;
+  student_name: string;
+  logs: DailyStudyLog[];
+}
+
+export interface CreateStudyLogPayload {
+  student_id: string;
+  batch_id: string;
+  institute_id: string;
+  title: string;
+  description: string;
+  log_date: string;
+  attachment_url?: string;
+}
+
+export interface UpdateStudyLogPayload {
+  title?: string;
+  description?: string;
+  attachment_url?: string;
+}
+
 export interface StudentAttendanceStats {
   student_id: string;
   total_sessions: number;

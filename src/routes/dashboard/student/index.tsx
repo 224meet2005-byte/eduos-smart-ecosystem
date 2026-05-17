@@ -7,6 +7,7 @@ import { AttendanceHistoryTable } from "@/components/dashboard/student/Attendanc
 import { AttendanceStatsCard } from "@/components/dashboard/student/AttendanceStatsCard";
 import { BatchInfoCard } from "@/components/dashboard/student/BatchInfoCard";
 import { StudentProfileCard } from "@/components/dashboard/student/StudentProfileCard";
+import { StudentStudyLogView } from "@/modules/study-logs/components/StudentStudyLogView";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ function StudentDashboard() {
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "all">("all");
   const [sortDirection, setSortDirection] = useState<"newest" | "oldest">("newest");
   const [page, setPage] = useState(1);
+  const [activeTab, setActiveTab] = useState<"overview" | "progress">("overview");
   const pageSize = 8;
 
   const DASHBOARD_CACHE_MS = 60_000;
@@ -279,113 +281,150 @@ function StudentDashboard() {
           </div>
         ) : activeDashboard ? (
           <div className="space-y-6">
-            <div className="grid gap-6 xl:grid-cols-2">
-              <StudentProfileCard
-                student={activeDashboard.student}
-                attendanceRate={attendanceRate}
-                lastUpdated={lastUpdated}
-              />
-              <BatchInfoCard batch={activeDashboard.batch} />
+            {/* Tab Switcher */}
+            <div className="flex items-center gap-1 border-b border-border mb-6">
+                <button 
+                    onClick={() => setActiveTab("overview")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+                        activeTab === "overview" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                    Dashboard Overview
+                    {activeTab === "overview" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                    )}
+                </button>
+                <button 
+                    onClick={() => setActiveTab("progress")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors relative flex items-center gap-2 ${
+                        activeTab === "progress" ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                    <Sparkles className="h-4 w-4" />
+                    Daily Progress
+                    {activeTab === "progress" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                    )}
+                </button>
             </div>
 
-            {activeDashboard.batch?.id ? (
-              <SchedulePortalView
-                title="Class timetable"
-                subtitle={activeDashboard.batch.name}
-                batchId={activeDashboard.batch.id}
-                loadSchedules={() =>
-                  getSchedulesByBatch(activeDashboard.batch!.id, true)
-                }
-              />
-            ) : null}
-
-            <div className="grid gap-4 md:grid-cols-4">
-              <FeeStatCard label="Total fees" value={`₹${feeTotals.total.toLocaleString("en-IN")}`} />
-              <FeeStatCard label="Paid" value={`₹${feeTotals.paid.toLocaleString("en-IN")}`} tone="success" />
-              <FeeStatCard label="Pending" value={`₹${feeTotals.pending.toLocaleString("en-IN")}`} tone="warning" />
-              <FeeStatCard label="Next due" value={feeTotals.nextDueDate ? new Date(feeTotals.nextDueDate).toLocaleDateString() : "—"} />
-            </div>
-
-            <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
-              <CardContent className="p-0">
-                <div className="border-b border-border px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-semibold text-foreground">Fee & Billing</h2>
-                      <p className="text-sm text-muted-foreground">
-                        {studentFees.length} active fee record{studentFees.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <Badge variant="outline">Parent linked automatically</Badge>
-                  </div>
+            {activeTab === "overview" ? (
+              <>
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <StudentProfileCard
+                    student={activeDashboard.student}
+                    attendanceRate={attendanceRate}
+                    lastUpdated={lastUpdated}
+                  />
+                  <BatchInfoCard batch={activeDashboard.batch} />
                 </div>
-                <div className="divide-y divide-border">
-                  {studentFees.length === 0 ? (
-                    <div className="px-5 py-8 text-sm text-muted-foreground">
-                      No fee records found for this student yet.
-                    </div>
-                  ) : (
-                    studentFees.map((fee) => {
-                      const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
-                      return (
-                        <div key={fee.id} className="px-5 py-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-foreground">
-                                {fee.fee_structure?.fee_name ?? fee.fee_structure?.name ?? "Fee"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Bill {fee.bill_number ?? fee.id.slice(0, 8)} · Due {new Date(fee.next_due_date ?? fee.due_date).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <FeeStatusBadge status={fee.status} />
-                          </div>
-                          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
-                            <MiniFeeMetric label="Total" value={`₹${fee.final_amount.toLocaleString("en-IN")}`} />
-                            <MiniFeeMetric label="Paid" value={`₹${fee.paid_so_far.toLocaleString("en-IN")}`} />
-                            <MiniFeeMetric label="Pending" value={`₹${remaining.toLocaleString("en-IN")}`} />
-                            <MiniFeeMetric label="Parent" value={fee.parent?.user?.name ?? "Linked parent"} />
-                          </div>
+
+                {activeDashboard.batch?.id ? (
+                  <SchedulePortalView
+                    title="Class timetable"
+                    subtitle={activeDashboard.batch.name}
+                    batchId={activeDashboard.batch.id}
+                    loadSchedules={() =>
+                      getSchedulesByBatch(activeDashboard.batch!.id, true)
+                    }
+                  />
+                ) : null}
+
+                <div className="grid gap-4 md:grid-cols-4">
+                  <FeeStatCard label="Total fees" value={`₹${feeTotals.total.toLocaleString("en-IN")}`} />
+                  <FeeStatCard label="Paid" value={`₹${feeTotals.paid.toLocaleString("en-IN")}`} tone="success" />
+                  <FeeStatCard label="Pending" value={`₹${feeTotals.pending.toLocaleString("en-IN")}`} tone="warning" />
+                  <FeeStatCard label="Next due" value={feeTotals.nextDueDate ? new Date(feeTotals.nextDueDate).toLocaleDateString() : "—"} />
+                </div>
+
+                <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="border-b border-border px-5 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-base font-semibold text-foreground">Fee & Billing</h2>
+                          <p className="text-sm text-muted-foreground">
+                            {studentFees.length} active fee record{studentFees.length === 1 ? "" : "s"}
+                          </p>
                         </div>
-                      );
-                    })
-                  )}
+                        <Badge variant="outline">Parent linked automatically</Badge>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {studentFees.length === 0 ? (
+                        <div className="px-5 py-8 text-sm text-muted-foreground">
+                          No fee records found for this student yet.
+                        </div>
+                      ) : (
+                        studentFees.map((fee) => {
+                          const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
+                          return (
+                            <div key={fee.id} className="px-5 py-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-medium text-foreground">
+                                    {fee.fee_structure?.fee_name ?? fee.fee_structure?.name ?? "Fee"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Bill {fee.bill_number ?? fee.id.slice(0, 8)} · Due {new Date(fee.next_due_date ?? fee.due_date).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <FeeStatusBadge status={fee.status} />
+                              </div>
+                              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
+                                <MiniFeeMetric label="Total" value={`₹${fee.final_amount.toLocaleString("en-IN")}`} />
+                                <MiniFeeMetric label="Paid" value={`₹${fee.paid_so_far.toLocaleString("en-IN")}`} />
+                                <MiniFeeMetric label="Pending" value={`₹${remaining.toLocaleString("en-IN")}`} />
+                                <MiniFeeMetric label="Parent" value={fee.parent?.user?.name ?? "Linked parent"} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <AttendanceStatsCard stats={activeDashboard.stats} />
+
+                <AttendanceChart
+                  monthlyTrend={activeDashboard.stats.monthly_trend}
+                  weeklyTrend={activeDashboard.stats.weekly_trend}
+                />
+
+                <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                  <AttendanceHistoryTable
+                    records={paginatedRecords}
+                    total={filteredRecords.length}
+                    page={page}
+                    pageSize={pageSize}
+                    search={search}
+                    statusFilter={statusFilter}
+                    sortDirection={sortDirection}
+                    onSearchChange={(value) => {
+                      setSearch(value);
+                      setPage(1);
+                    }}
+                    onStatusChange={(value) => {
+                      setStatusFilter(value);
+                      setPage(1);
+                    }}
+                    onSortChange={(value) => {
+                      setSortDirection(value);
+                      setPage(1);
+                    }}
+                    onPageChange={setPage}
+                  />
+                  <AttendanceCalendar records={attendanceRecords} />
                 </div>
-              </CardContent>
-            </Card>
-
-            <AttendanceStatsCard stats={activeDashboard.stats} />
-
-            <AttendanceChart
-              monthlyTrend={activeDashboard.stats.monthly_trend}
-              weeklyTrend={activeDashboard.stats.weekly_trend}
-            />
-
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <AttendanceHistoryTable
-                records={paginatedRecords}
-                total={filteredRecords.length}
-                page={page}
-                pageSize={pageSize}
-                search={search}
-                statusFilter={statusFilter}
-                sortDirection={sortDirection}
-                onSearchChange={(value) => {
-                  setSearch(value);
-                  setPage(1);
-                }}
-                onStatusChange={(value) => {
-                  setStatusFilter(value);
-                  setPage(1);
-                }}
-                onSortChange={(value) => {
-                  setSortDirection(value);
-                  setPage(1);
-                }}
-                onPageChange={setPage}
-              />
-              <AttendanceCalendar records={attendanceRecords} />
-            </div>
+              </>
+            ) : (
+                <StudentStudyLogView 
+                    studentId={activeDashboard.student.id}
+                    batchId={activeDashboard.student.batch_id || ""}
+                    instituteId={user?.institute_id || activeDashboard.student.institute_id}
+                />
+            )}
             <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Page {pageLabel}</p>
           </div>
         ) : null}

@@ -24,6 +24,7 @@ import { Route as DashboardParentIndexRouteImport } from './routes/dashboard/par
 import { Route as DashboardAnalyticsIndexRouteImport } from './routes/dashboard/analytics/index'
 import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard/admin/index'
 import { Route as DashboardStaffStudentsIndexRouteImport } from './routes/dashboard/staff/students/index'
+import { Route as DashboardAdminStudyLogsIndexRouteImport } from './routes/dashboard/admin/study-logs/index'
 import { Route as DashboardAdminStudentsIndexRouteImport } from './routes/dashboard/admin/students/index'
 import { Route as DashboardAdminStaffIndexRouteImport } from './routes/dashboard/admin/staff/index'
 import { Route as DashboardAdminScheduleIndexRouteImport } from './routes/dashboard/admin/schedule/index'
@@ -111,6 +112,12 @@ const DashboardStaffStudentsIndexRoute =
     path: '/staff/students/',
     getParentRoute: () => DashboardRoute,
   } as any)
+const DashboardAdminStudyLogsIndexRoute =
+  DashboardAdminStudyLogsIndexRouteImport.update({
+    id: '/admin/study-logs/',
+    path: '/admin/study-logs/',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 const DashboardAdminStudentsIndexRoute =
   DashboardAdminStudentsIndexRouteImport.update({
     id: '/admin/students/',
@@ -189,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/schedule/': typeof DashboardAdminScheduleIndexRoute
   '/dashboard/admin/staff/': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students/': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/admin/study-logs/': typeof DashboardAdminStudyLogsIndexRoute
   '/dashboard/staff/students/': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -214,6 +222,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/schedule': typeof DashboardAdminScheduleIndexRoute
   '/dashboard/admin/staff': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/admin/study-logs': typeof DashboardAdminStudyLogsIndexRoute
   '/dashboard/staff/students': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRoutesById {
@@ -241,6 +250,7 @@ export interface FileRoutesById {
   '/dashboard/admin/schedule/': typeof DashboardAdminScheduleIndexRoute
   '/dashboard/admin/staff/': typeof DashboardAdminStaffIndexRoute
   '/dashboard/admin/students/': typeof DashboardAdminStudentsIndexRoute
+  '/dashboard/admin/study-logs/': typeof DashboardAdminStudyLogsIndexRoute
   '/dashboard/staff/students/': typeof DashboardStaffStudentsIndexRoute
 }
 export interface FileRouteTypes {
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/schedule/'
     | '/dashboard/admin/staff/'
     | '/dashboard/admin/students/'
+    | '/dashboard/admin/study-logs/'
     | '/dashboard/staff/students/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/schedule'
     | '/dashboard/admin/staff'
     | '/dashboard/admin/students'
+    | '/dashboard/admin/study-logs'
     | '/dashboard/staff/students'
   id:
     | '__root__'
@@ -320,6 +332,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/schedule/'
     | '/dashboard/admin/staff/'
     | '/dashboard/admin/students/'
+    | '/dashboard/admin/study-logs/'
     | '/dashboard/staff/students/'
   fileRoutesById: FileRoutesById
 }
@@ -440,6 +453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardStaffStudentsIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/admin/study-logs/': {
+      id: '/dashboard/admin/study-logs/'
+      path: '/admin/study-logs'
+      fullPath: '/dashboard/admin/study-logs/'
+      preLoaderRoute: typeof DashboardAdminStudyLogsIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/admin/students/': {
       id: '/dashboard/admin/students/'
       path: '/admin/students'
@@ -523,6 +543,7 @@ interface DashboardRouteChildren {
   DashboardAdminScheduleIndexRoute: typeof DashboardAdminScheduleIndexRoute
   DashboardAdminStaffIndexRoute: typeof DashboardAdminStaffIndexRoute
   DashboardAdminStudentsIndexRoute: typeof DashboardAdminStudentsIndexRoute
+  DashboardAdminStudyLogsIndexRoute: typeof DashboardAdminStudyLogsIndexRoute
   DashboardStaffStudentsIndexRoute: typeof DashboardStaffStudentsIndexRoute
 }
 
@@ -543,6 +564,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAdminScheduleIndexRoute: DashboardAdminScheduleIndexRoute,
   DashboardAdminStaffIndexRoute: DashboardAdminStaffIndexRoute,
   DashboardAdminStudentsIndexRoute: DashboardAdminStudentsIndexRoute,
+  DashboardAdminStudyLogsIndexRoute: DashboardAdminStudyLogsIndexRoute,
   DashboardStaffStudentsIndexRoute: DashboardStaffStudentsIndexRoute,
 }
 

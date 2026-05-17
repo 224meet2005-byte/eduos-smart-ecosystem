@@ -63,6 +63,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Operations",
         items: [
           { title: "Attendance", url: "/dashboard/admin/attendance", icon: Calendar },
+          { title: "Progress Tracker", url: "/dashboard/admin/study-logs", icon: LayoutDashboard },
           { title: "Fees & Billing", url: "/dashboard/admin/fees", icon: CreditCard },
           {
             title: "Communication",
@@ -102,6 +103,13 @@ function getNavGroups(role: UserRole): NavGroup[] {
         items: [
           { title: "Dashboard", url: "/dashboard/staff", icon: LayoutDashboard },
           { title: "Students", url: "/dashboard/staff/students", icon: GraduationCap },
+        ],
+      },
+      {
+        label: "Operations",
+        items: [
+          { title: "Attendance", url: "/dashboard/admin/attendance", icon: Calendar },
+          { title: "Progress Tracker", url: "/dashboard/admin/study-logs", icon: LayoutDashboard },
         ],
       },
     ];
