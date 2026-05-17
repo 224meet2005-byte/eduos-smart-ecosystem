@@ -40,6 +40,7 @@ interface NavGroup {
 // Items marked `comingSoon` render as disabled placeholders.
 // ---------------------------------------------------------------------------
 function getNavGroups(role: UserRole): NavGroup[] {
+  // Merge strategy: prefer non-destructive union of both branches.
   if (role === "admin") {
     return [
       {
@@ -55,7 +56,9 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "Students", url: "/dashboard/admin/students", icon: GraduationCap },
           { title: "Batches", url: "/dashboard/admin/batches", icon: BookOpen },
           { title: "Parents", url: "/dashboard/admin/parents", icon: Users },
+          // Use the more specific staff icon (UserCheck) but keep courses added by remote.
           { title: "Staff", url: "/dashboard/admin/staff", icon: UserCheck },
+          { title: "Courses", url: "/dashboard/admin/courses", icon: BookOpen },
           { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
         ],
       },
@@ -103,6 +106,8 @@ function getNavGroups(role: UserRole): NavGroup[] {
         items: [
           { title: "Dashboard", url: "/dashboard/staff", icon: LayoutDashboard },
           { title: "Students", url: "/dashboard/staff/students", icon: GraduationCap },
+          { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
+          { title: "My Courses", url: "/dashboard/staff/courses", icon: BookOpen },
         ],
       },
       {
@@ -119,7 +124,11 @@ function getNavGroups(role: UserRole): NavGroup[] {
     return [
       {
         label: "My Portal",
-        items: [{ title: "Dashboard", url: "/dashboard/student", icon: LayoutDashboard }],
+        items: [
+          { title: "Dashboard", url: "/dashboard/student", icon: LayoutDashboard },
+          { title: "My Learning", url: "/dashboard/student/my-learning", icon: BookOpen },
+          { title: "Browse Courses", url: "/dashboard/student/courses", icon: GraduationCap },
+        ],
       },
     ];
   }

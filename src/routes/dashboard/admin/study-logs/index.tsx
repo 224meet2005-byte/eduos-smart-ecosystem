@@ -50,7 +50,9 @@ function StudyLogsPage() {
         .filter((a) => a.batch && a.batch.is_active !== false)
         .map((a) => ({
           id: a.batch!.id,
-          label: a.batch!.course_name ? `${a.batch!.name} • ${a.batch!.course_name}` : a.batch!.name,
+          label: a.batch!.course_name
+            ? `${a.batch!.name} • ${a.batch!.course_name}`
+            : a.batch!.name,
         }));
 
       setBatches(scopedBatches);

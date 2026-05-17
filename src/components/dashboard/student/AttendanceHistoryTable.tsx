@@ -1,5 +1,11 @@
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +80,10 @@ export function AttendanceHistoryTable({
               className="pl-9"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(value) => onStatusChange(value as AttendanceStatus | "all") }>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => onStatusChange(value as AttendanceStatus | "all")}
+          >
             <SelectTrigger>
               <div className="flex items-center gap-2">
                 <Filter className="size-4 text-muted-foreground" />
@@ -89,15 +98,32 @@ export function AttendanceHistoryTable({
               <SelectItem value="leave">Leave</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => onSortChange(sortDirection === "newest" ? "oldest" : "newest")}>
-            {sortDirection === "newest" ? <ArrowDown className="mr-2 size-4" /> : <ArrowUp className="mr-2 size-4" />}
+          <Button
+            variant="outline"
+            onClick={() => onSortChange(sortDirection === "newest" ? "oldest" : "newest")}
+          >
+            {sortDirection === "newest" ? (
+              <ArrowDown className="mr-2 size-4" />
+            ) : (
+              <ArrowUp className="mr-2 size-4" />
+            )}
             {sortDirection === "newest" ? "Newest first" : "Oldest first"}
           </Button>
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="icon" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page <= 1}
+            >
               <ArrowUp className="size-4 rotate-[-90deg]" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+              disabled={page >= totalPages}
+            >
               <ArrowUp className="size-4 rotate-90" />
             </Button>
           </div>
@@ -126,14 +152,21 @@ export function AttendanceHistoryTable({
                       {record.session?.batch?.name ?? "General"}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize", STATUS_TONES[record.status])}>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize",
+                          STATUS_TONES[record.status],
+                        )}
+                      >
                         {record.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">
                       {format(parseISO(record.marked_at), "dd MMM yyyy, h:mm a")}
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{record.notes ?? "-"}</td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                      {record.notes ?? "-"}
+                    </td>
                   </tr>
                 ))
               ) : (

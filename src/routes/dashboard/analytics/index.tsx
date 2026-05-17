@@ -130,13 +130,17 @@ function AnalyticsPage() {
     if (!bundle) return [];
     const items: string[] = [];
     if (bundle.overview.attendance.rate < 75) {
-      items.push("Institute attendance is below 75% for the selected period — review batch breakdown.");
+      items.push(
+        "Institute attendance is below 75% for the selected period — review batch breakdown.",
+      );
     }
     if (bundle.overview.fees.overdue > 0) {
       items.push("Outstanding overdue fees detected — follow up with finance team.");
     }
     if (bundle.overview.schedules.draft > bundle.overview.schedules.published) {
-      items.push("More draft timetables than published — publish schedules for parent/student visibility.");
+      items.push(
+        "More draft timetables than published — publish schedules for parent/student visibility.",
+      );
     }
     if (items.length === 0) {
       items.push("Key metrics are within normal ranges for the selected period.");

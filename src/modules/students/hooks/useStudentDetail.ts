@@ -28,8 +28,8 @@ import {
   getStudentHistory,
   getStudentPromotions,
   getStudentDocuments,
-  getBatchesByInstitute,
 } from "@/services/student.service";
+import { getBatchesByInstitute } from "@/services/batch.service";
 import type { Student, StudentHistory, StudentPromotion, StudentDocument, Batch } from "@/types";
 
 // ── Options ───────────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ export function useStudentDetail({ studentId, instituteId }: UseStudentDetailOpt
 
     // ── Batches (soft dependency) ──────────────────────────────────────────
     if (batchesResult.success && batchesResult.data) {
-      setBatches(batchesResult.data);
+      setBatches(batchesResult.data.items);
     } else {
       console.warn("[useStudentDetail] Failed to load batches:", batchesResult.error);
       setBatches([]);

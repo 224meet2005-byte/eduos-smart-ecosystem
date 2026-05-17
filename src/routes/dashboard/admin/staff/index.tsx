@@ -21,13 +21,7 @@ function StaffPage() {
   const { user } = useAuthStore();
   const instituteId = user?.institute_id ?? null;
 
-  const {
-    staff,
-    isLoading,
-    error,
-    fetchStaff,
-    deleteStaffMember,
-  } = useStaff({ instituteId });
+  const { staff, isLoading, error, fetchStaff, deleteStaffMember } = useStaff({ instituteId });
 
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
@@ -37,18 +31,22 @@ function StaffPage() {
     setSelectedStaff(s);
   }, []);
 
-  const handleDelete = useCallback(async (s: Staff) => {
-    if (window.confirm(`Are you sure you want to remove ${s.user?.name} from staff?`)) {
-      await deleteStaffMember(s.id);
-      if (selectedStaff?.id === s.id) setSelectedStaff(null);
-    }
-  }, [deleteStaffMember, selectedStaff?.id]);
+  const handleDelete = useCallback(
+    async (s: Staff) => {
+      if (window.confirm(`Are you sure you want to remove ${s.user?.name} from staff?`)) {
+        await deleteStaffMember(s.id);
+        if (selectedStaff?.id === s.id) setSelectedStaff(null);
+      }
+    },
+    [deleteStaffMember, selectedStaff?.id],
+  );
 
-  const filteredStaff = staff.filter(s => 
-    s.user?.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
-    s.user?.email?.toLowerCase().includes(searchValue.toLowerCase()) ||
-    s.designation?.toLowerCase().includes(searchValue.toLowerCase()) ||
-    s.department?.toLowerCase().includes(searchValue.toLowerCase())
+  const filteredStaff = staff.filter(
+    (s) =>
+      s.user?.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      s.user?.email?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      s.designation?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      s.department?.toLowerCase().includes(searchValue.toLowerCase()),
   );
 
   return (

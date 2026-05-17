@@ -40,10 +40,34 @@ export function AttendanceChart({ monthlyTrend, weeklyTrend }: AttendanceChartPr
               <YAxis tickLine={false} axisLine={false} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Line type="monotone" dataKey="present" stroke="var(--color-present)" strokeWidth={3} dot={false} />
-              <Line type="monotone" dataKey="absent" stroke="var(--color-absent)" strokeWidth={3} dot={false} />
-              <Line type="monotone" dataKey="late" stroke="var(--color-late)" strokeWidth={3} dot={false} />
-              <Line type="monotone" dataKey="leave" stroke="var(--color-leave)" strokeWidth={3} dot={false} />
+              <Line
+                type="monotone"
+                dataKey="present"
+                stroke="var(--color-present)"
+                strokeWidth={3}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="absent"
+                stroke="var(--color-absent)"
+                strokeWidth={3}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="late"
+                stroke="var(--color-late)"
+                strokeWidth={3}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="leave"
+                stroke="var(--color-leave)"
+                strokeWidth={3}
+                dot={false}
+              />
             </LineChart>
           </ChartContainer>
         </CardContent>
@@ -64,10 +88,30 @@ export function AttendanceChart({ monthlyTrend, weeklyTrend }: AttendanceChartPr
               <YAxis tickLine={false} axisLine={false} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Bar dataKey="present" stackId="attendance" fill="var(--color-present)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="late" stackId="attendance" fill="var(--color-late)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="absent" stackId="attendance" fill="var(--color-absent)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="leave" stackId="attendance" fill="var(--color-leave)" radius={[6, 6, 0, 0]} />
+              <Bar
+                dataKey="present"
+                stackId="attendance"
+                fill="var(--color-present)"
+                radius={[6, 6, 0, 0]}
+              />
+              <Bar
+                dataKey="late"
+                stackId="attendance"
+                fill="var(--color-late)"
+                radius={[6, 6, 0, 0]}
+              />
+              <Bar
+                dataKey="absent"
+                stackId="attendance"
+                fill="var(--color-absent)"
+                radius={[6, 6, 0, 0]}
+              />
+              <Bar
+                dataKey="leave"
+                stackId="attendance"
+                fill="var(--color-leave)"
+                radius={[6, 6, 0, 0]}
+              />
             </BarChart>
           </ChartContainer>
         </CardContent>

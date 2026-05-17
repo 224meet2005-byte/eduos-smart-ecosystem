@@ -7,19 +7,15 @@ import { AttendanceHistoryTable } from "@/components/dashboard/student/Attendanc
 import { AttendanceStatsCard } from "@/components/dashboard/student/AttendanceStatsCard";
 import { BatchInfoCard } from "@/components/dashboard/student/BatchInfoCard";
 import { StudentProfileCard } from "@/components/dashboard/student/StudentProfileCard";
-import { StudentStudyLogView } from "@/modules/study-logs/components/StudentStudyLogView";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentStudentDashboard } from "@/services/student.service";
-import { getStudentFees } from "@/services/billing.service";
 import { useAuthStore } from "@/store/authStore";
 import { useStudentDashboardStore } from "@/store/studentDashboardStore";
-import type { AttendanceStatus, StudentAttendanceRecord, StudentFee } from "@/types";
+import type { AttendanceStatus, StudentAttendanceRecord } from "@/types";
 import { AlertCircle, RefreshCw, Sparkles } from "lucide-react";
-import { FeeStatusBadge } from "@/modules/fees/components/FeeStatusBadge";
-import { SchedulePortalView } from "@/modules/schedule/components/SchedulePortalView";
-import { getSchedulesByBatch } from "@/services/schedule.service";
+import { StudentLearningSection } from "@/modules/courses/components/student/StudentLearningSection";
 
 export const Route = createFileRoute("/dashboard/student/")({
   head: () => ({ meta: [{ title: "Student Dashboard — EduOS" }] }),
@@ -38,16 +34,11 @@ function StudentDashboard() {
   const setDashboard = useStudentDashboardStore((state) => state.setDashboard);
 
   const [warning, setWarning] = useState<string | null>(null);
-  const [feeWarning, setFeeWarning] = useState<string | null>(null);
-  const [studentFees, setStudentFees] = useState<StudentFee[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "all">("all");
   const [sortDirection, setSortDirection] = useState<"newest" | "oldest">("newest");
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<"overview" | "progress">("overview");
   const pageSize = 8;
-
-  const DASHBOARD_CACHE_MS = 60_000;
 
   useEffect(() => {
     if (!user?.id) {
@@ -60,42 +51,23 @@ function StudentDashboard() {
       return;
     }
 
-    if (
-      dashboard &&
-      cachedStudentId === user.id &&
-      lastUpdated &&
-      Date.now() - new Date(lastUpdated).getTime() < DASHBOARD_CACHE_MS
-    ) {
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
+    const userId = user.id;
+    const instituteId = user.institute_id;
 
     async function loadDashboard() {
       setLoading(true);
       setWarning(null);
-      setFeeWarning(null);
 
-      const response = await getCurrentStudentDashboard(user.id, user.institute_id);
+      const response = await getCurrentStudentDashboard(userId, instituteId);
       if (cancelled) return;
 
       if (response.success && response.data) {
-        setDashboard(user.id, response.data);
+        setDashboard(userId, response.data);
         setWarning(response.error);
         setError(null);
       } else {
         setError(response.error ?? "Failed to load the student dashboard.");
-      }
-
-      if (response.success && response.data?.student?.id) {
-        const feeResult = await getStudentFees(response.data.student.id);
-        if (!cancelled && feeResult.success && feeResult.data) {
-          setStudentFees(feeResult.data);
-        } else if (!cancelled) {
-          setFeeWarning(feeResult.error ?? "Failed to load fee data.");
-          setStudentFees([]);
-        }
       }
 
       setLoading(false);
@@ -103,23 +75,16 @@ function StudentDashboard() {
 
     loadDashboard().catch((loadError) => {
       if (cancelled) return;
-      setError(loadError instanceof Error ? loadError.message : "Failed to load the student dashboard.");
+      setError(
+        loadError instanceof Error ? loadError.message : "Failed to load the student dashboard.",
+      );
       setLoading(false);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    setDashboard,
-    setError,
-    setLoading,
-    user?.id,
-    user?.institute_id,
-    dashboard,
-    cachedStudentId,
-    lastUpdated,
-  ]);
+  }, [setDashboard, setError, setLoading, user?.id, user?.institute_id]);
 
   const activeDashboard = dashboard && cachedStudentId === user?.id ? dashboard : null;
   const attendanceRecords = activeDashboard?.history ?? [];
@@ -169,21 +134,12 @@ function StudentDashboard() {
 
     setLoading(true);
     setWarning(null);
-    setFeeWarning(null);
     void getCurrentStudentDashboard(user.id, user.institute_id)
       .then((response) => {
         if (response.success && response.data) {
           setDashboard(user.id, response.data);
           setWarning(response.error);
           setError(null);
-          return getStudentFees(response.data.student.id).then((feeResult) => {
-            if (feeResult.success && feeResult.data) {
-              setStudentFees(feeResult.data);
-            } else {
-              setFeeWarning(feeResult.error ?? "Failed to load fee data.");
-              setStudentFees([]);
-            }
-          });
         } else {
           setError(response.error ?? "Failed to refresh the student dashboard.");
         }
@@ -193,49 +149,50 @@ function StudentDashboard() {
 
   const attendanceRate = activeDashboard?.stats.percentage ?? 0;
   const studentName = activeDashboard?.student.user?.name ?? user?.name ?? "Student";
-  const feeTotals = useMemo(() => {
-    const total = studentFees.reduce((sum, fee) => sum + fee.final_amount, 0);
-    const paid = studentFees.reduce((sum, fee) => sum + fee.paid_so_far, 0);
-    const pending = Math.max(0, total - paid);
-    const nextDueDate =
-      studentFees
-        .map((fee) => fee.next_due_date ?? fee.due_date)
-        .filter(Boolean)
-        .sort()[0] ?? null;
-
-    return { total, paid, pending, nextDueDate };
-  }, [studentFees]);
   const pageLabel = `${page} / ${totalPages}`;
 
   return (
     <ProtectedRoute allowedRoles={["student"]}>
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-[2rem] border border-border/60 bg-gradient-to-br from-background via-muted/40 to-primary/10 p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <Badge variant="outline" className="gap-1.5 w-fit">
+        <section className="relative overflow-hidden rounded-[2rem] border border-border/40 bg-card p-6 md:p-10 shadow-lg">
+          {/* Decorative background blobs */}
+          <div className="absolute top-0 left-0 -ml-20 -mt-20 size-[300px] rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 right-0 -mr-20 -mb-20 size-[200px] rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-4 max-w-2xl">
+              <Badge
+                variant="outline"
+                className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit"
+              >
                 <Sparkles className="size-3.5" />
                 Student Portal
               </Badge>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                  Welcome back, {studentName.split(" ")[0]}.
+                <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-5xl leading-tight">
+                  Welcome back,{" "}
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
+                    {studentName.split(" ")[0]}
+                  </span>
+                  .
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-                  View your profile, batch assignment, attendance trend, and session history in one place.
+                <p className="mt-4 max-w-2xl text-base text-muted-foreground leading-relaxed">
+                  View your profile, batch assignment, attendance trend, and session history in one
+                  place.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {warning ? (
-                <Badge variant="outline" className="gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-300">
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                >
                   <AlertCircle className="size-3.5" />
                   Partial data loaded
                 </Badge>
               ) : null}
-              {isLoading ? (
-                <Badge variant="secondary">Refreshing</Badge>
-              ) : null}
+              {isLoading ? <Badge variant="secondary">Refreshing</Badge> : null}
               <Button variant="outline" onClick={refresh}>
                 <RefreshCw className="mr-2 size-4" />
                 Refresh
@@ -260,18 +217,14 @@ function StudentDashboard() {
               <p>{error}</p>
             </div>
           ) : null}
-          {feeWarning ? (
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              <p>{feeWarning}</p>
-            </div>
-          ) : null}
           {lastUpdated ? (
             <p className="mt-4 text-xs uppercase tracking-[0.24em] text-muted-foreground">
               Last synced {new Date(lastUpdated).toLocaleString()}
             </p>
           ) : null}
         </section>
+
+        {user?.id ? <StudentLearningSection studentId={user.id} /> : null}
 
         {!activeDashboard && isLoading ? (
           <div className="grid gap-6 xl:grid-cols-2">
@@ -281,152 +234,50 @@ function StudentDashboard() {
           </div>
         ) : activeDashboard ? (
           <div className="space-y-6">
-            {/* Tab Switcher */}
-            <div className="flex items-center gap-1 border-b border-border mb-6">
-                <button 
-                    onClick={() => setActiveTab("overview")}
-                    className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-                        activeTab === "overview" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                >
-                    Dashboard Overview
-                    {activeTab === "overview" && (
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                    )}
-                </button>
-                <button 
-                    onClick={() => setActiveTab("progress")}
-                    className={`px-4 py-2 text-sm font-medium transition-colors relative flex items-center gap-2 ${
-                        activeTab === "progress" ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                >
-                    <Sparkles className="h-4 w-4" />
-                    Daily Progress
-                    {activeTab === "progress" && (
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                    )}
-                </button>
+            <div className="grid gap-6 xl:grid-cols-2">
+              <StudentProfileCard
+                student={activeDashboard.student}
+                attendanceRate={attendanceRate}
+                lastUpdated={lastUpdated}
+              />
+              <BatchInfoCard batch={activeDashboard.batch} />
             </div>
 
-            {activeTab === "overview" ? (
-              <>
-                <div className="grid gap-6 xl:grid-cols-2">
-                  <StudentProfileCard
-                    student={activeDashboard.student}
-                    attendanceRate={attendanceRate}
-                    lastUpdated={lastUpdated}
-                  />
-                  <BatchInfoCard batch={activeDashboard.batch} />
-                </div>
+            <AttendanceStatsCard stats={activeDashboard.stats} />
 
-                {activeDashboard.batch?.id ? (
-                  <SchedulePortalView
-                    title="Class timetable"
-                    subtitle={activeDashboard.batch.name}
-                    batchId={activeDashboard.batch.id}
-                    loadSchedules={() =>
-                      getSchedulesByBatch(activeDashboard.batch!.id, true)
-                    }
-                  />
-                ) : null}
+            <AttendanceChart
+              monthlyTrend={activeDashboard.stats.monthly_trend}
+              weeklyTrend={activeDashboard.stats.weekly_trend}
+            />
 
-                <div className="grid gap-4 md:grid-cols-4">
-                  <FeeStatCard label="Total fees" value={`₹${feeTotals.total.toLocaleString("en-IN")}`} />
-                  <FeeStatCard label="Paid" value={`₹${feeTotals.paid.toLocaleString("en-IN")}`} tone="success" />
-                  <FeeStatCard label="Pending" value={`₹${feeTotals.pending.toLocaleString("en-IN")}`} tone="warning" />
-                  <FeeStatCard label="Next due" value={feeTotals.nextDueDate ? new Date(feeTotals.nextDueDate).toLocaleDateString() : "—"} />
-                </div>
-
-                <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
-                  <CardContent className="p-0">
-                    <div className="border-b border-border px-5 py-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h2 className="text-base font-semibold text-foreground">Fee & Billing</h2>
-                          <p className="text-sm text-muted-foreground">
-                            {studentFees.length} active fee record{studentFees.length === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                        <Badge variant="outline">Parent linked automatically</Badge>
-                      </div>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {studentFees.length === 0 ? (
-                        <div className="px-5 py-8 text-sm text-muted-foreground">
-                          No fee records found for this student yet.
-                        </div>
-                      ) : (
-                        studentFees.map((fee) => {
-                          const remaining = Math.max(0, fee.final_amount - fee.paid_so_far);
-                          return (
-                            <div key={fee.id} className="px-5 py-4">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <p className="font-medium text-foreground">
-                                    {fee.fee_structure?.fee_name ?? fee.fee_structure?.name ?? "Fee"}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Bill {fee.bill_number ?? fee.id.slice(0, 8)} · Due {new Date(fee.next_due_date ?? fee.due_date).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                <FeeStatusBadge status={fee.status} />
-                              </div>
-                              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
-                                <MiniFeeMetric label="Total" value={`₹${fee.final_amount.toLocaleString("en-IN")}`} />
-                                <MiniFeeMetric label="Paid" value={`₹${fee.paid_so_far.toLocaleString("en-IN")}`} />
-                                <MiniFeeMetric label="Pending" value={`₹${remaining.toLocaleString("en-IN")}`} />
-                                <MiniFeeMetric label="Parent" value={fee.parent?.user?.name ?? "Linked parent"} />
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <AttendanceStatsCard stats={activeDashboard.stats} />
-
-                <AttendanceChart
-                  monthlyTrend={activeDashboard.stats.monthly_trend}
-                  weeklyTrend={activeDashboard.stats.weekly_trend}
-                />
-
-                <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                  <AttendanceHistoryTable
-                    records={paginatedRecords}
-                    total={filteredRecords.length}
-                    page={page}
-                    pageSize={pageSize}
-                    search={search}
-                    statusFilter={statusFilter}
-                    sortDirection={sortDirection}
-                    onSearchChange={(value) => {
-                      setSearch(value);
-                      setPage(1);
-                    }}
-                    onStatusChange={(value) => {
-                      setStatusFilter(value);
-                      setPage(1);
-                    }}
-                    onSortChange={(value) => {
-                      setSortDirection(value);
-                      setPage(1);
-                    }}
-                    onPageChange={setPage}
-                  />
-                  <AttendanceCalendar records={attendanceRecords} />
-                </div>
-              </>
-            ) : (
-                <StudentStudyLogView 
-                    studentId={activeDashboard.student.id}
-                    batchId={activeDashboard.student.batch_id || ""}
-                    instituteId={user?.institute_id || activeDashboard.student.institute_id}
-                    assignments={activeDashboard.student.assignments}
-                />
-            )}
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Page {pageLabel}</p>
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <AttendanceHistoryTable
+                records={paginatedRecords}
+                total={filteredRecords.length}
+                page={page}
+                pageSize={pageSize}
+                search={search}
+                statusFilter={statusFilter}
+                sortDirection={sortDirection}
+                onSearchChange={(value) => {
+                  setSearch(value);
+                  setPage(1);
+                }}
+                onStatusChange={(value) => {
+                  setStatusFilter(value);
+                  setPage(1);
+                }}
+                onSortChange={(value) => {
+                  setSortDirection(value);
+                  setPage(1);
+                }}
+                onPageChange={setPage}
+              />
+              <AttendanceCalendar records={attendanceRecords} />
+            </div>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              Page {pageLabel}
+            </p>
           </div>
         ) : null}
       </div>
@@ -436,10 +287,13 @@ function StudentDashboard() {
 
 function QuickMetric({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="border-border/50 bg-background/70">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+    <Card className="relative overflow-hidden border-border/50 bg-background/50 backdrop-blur-sm hover:shadow-md transition-shadow group">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <CardContent className="p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground/80">
+          {label}
+        </p>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
       </CardContent>
     </Card>
   );
@@ -457,39 +311,5 @@ function LoadingCard({ className }: { className?: string }) {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function FeeStatCard({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "success" | "warning";
-}) {
-  const toneClasses: Record<typeof tone, string> = {
-    default: "bg-muted/40 text-foreground",
-    success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    warning: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  };
-
-  return (
-    <Card className="border-border/60 bg-card/80 shadow-sm">
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-        <p className={`mt-2 text-lg font-semibold ${toneClasses[tone]}`}>{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MiniFeeMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
-    </div>
   );
 }

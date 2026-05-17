@@ -1,24 +1,8 @@
 // ---------------------------------------------------------------------------
-// PII Helpers
+// Utilities (consolidated merged version)
 // ---------------------------------------------------------------------------
 
-/**
- * Mask an Aadhaar number, showing only the last 4 digits.
- * Accepts raw 12-digit strings or already-formatted values.
- *
- * @example maskAadhaar('123456789012') // 'XXXX-XXXX-9012'
- */
-// Aadhaar masking removed — identity PII handling is not collected in admission flow.
-
-// ---------------------------------------------------------------------------
-// Date / Time
-// ---------------------------------------------------------------------------
-
-/**
- * Format an ISO date string into a human-readable Indian locale date.
- *
- * @example formatDate('2024-01-15T10:30:00Z') // '15 Jan 2024'
- */
+/** Format an ISO date string into a short Indian locale date. */
 export function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-IN", {
     year: "numeric",
@@ -27,11 +11,6 @@ export function formatDate(dateStr: string): string {
   });
 }
 
-/**
- * Format an ISO date string as a short date-time in the Indian locale.
- *
- * @example formatDateTime('2024-01-15T10:30:00Z') // '15 Jan 2024, 10:30 am'
- */
 export function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString("en-IN", {
     year: "numeric",
@@ -42,132 +21,99 @@ export function formatDateTime(dateStr: string): string {
   });
 }
 
-// ---------------------------------------------------------------------------
-// String / Text
-// ---------------------------------------------------------------------------
-
-/**
- * Extract up to 2 uppercase initials from a display name.
- * Used for avatar fallbacks.
- *
- * @example getInitials('Ravi Kumar')  // 'RK'
- * @example getInitials('Ananya')      // 'AN'  ← only 1 word → first 2 chars
- */
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) {
-    // Single word: take the first two characters
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  return parts
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return parts.map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-/**
- * Truncate a string to `length` characters, appending '…' if needed.
- *
- * @example truncate('Hello World', 5) // 'Hello...'
- */
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
   return `${str.slice(0, length)}...`;
 }
 
-/**
- * Copy text to the system clipboard using the modern Clipboard API.
- * Returns true on success, false on failure.
- */
+/** Copy text to clipboard using modern API with a DOM fallback. */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  if (!navigator.clipboard) return false;
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (err) {
-    console.error("Failed to copy text to clipboard:", err);
-    return false;
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fallthrough to legacy approach
+    }
   }
+
+  if (typeof document === "undefined") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+
+  document.body.removeChild(textarea);
+  return copied;
 }
 
-// ---------------------------------------------------------------------------
-// Async / Timing
-// ---------------------------------------------------------------------------
-
-/**
- * Promise-based sleep. Useful in dev for simulating latency.
- *
- * @example await sleep(500); // pauses for 500 ms
- */
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-/**
- * Test whether a string is a valid UUID v4.
- *
- * @example isUUID('550e8400-e29b-41d4-a716-446655440000') // true
- */
 export function isUUID(str: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
 
-/**
- * Safely extract an error message from a Supabase error or a standard Error object.
- * Always returns a non-empty string.
- */
-export function getErrorMessage(err: any, fallback = "An unexpected error occurred."): string {
-  if (!err) return fallback;
-  if (typeof err === "string") return err;
-  
-  // Handle specific "FetchError: undefined" pattern
-  if (err.name === "FetchError" && (!err.message || err.message === "undefined")) {
+/** Robust error message normalization (merged logic). */
+export function getErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (!error) return fallback;
+  if (typeof error === "string") return error;
+
+  // Handle common Error objects
+  if (error instanceof Error && error.message) return error.message;
+
+  // Handle FetchError-like shapes where message might be missing
+  const errObj = error as Record<string, unknown>;
+  if (errObj.name === "FetchError" && (!errObj.message || errObj.message === "undefined")) {
     return "Network error: Failed to connect to the server. Please check your internet connection.";
   }
 
-  if (err.message && typeof err.message === "string") return err.message;
-  if (err.error_description && typeof err.error_description === "string") return err.error_description;
-  
-  // Fallback to stringified error if it has some content
-  const stringified = String(err);
-  if (stringified && stringified !== "[object Object]") return stringified;
+  // Nested message patterns
+  const maybeMessage = errObj.message;
+  if (typeof maybeMessage === "string" && maybeMessage.trim()) return maybeMessage;
 
+  const maybeError = errObj.error;
+  if (maybeError && typeof maybeError === "object") {
+    const nested = (maybeError as Record<string, unknown>).message;
+    if (typeof nested === "string" && nested.trim()) return nested;
+  }
+
+  const stringified = String(error);
+  if (stringified && stringified !== "[object Object]") return stringified;
   return fallback;
 }
 
-/**
- * Check if an error is a standard AbortError (caused by AbortController.abort()).
- */
 export function isAbortError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    // Check for generic signal aborted message from modern browsers
-    const msg = String(err).toLowerCase();
+  if (!err || typeof err !== "object") {
+    const msg = String(err || "").toLowerCase();
     return msg.includes("abort") || msg.includes("cancel");
   }
-  return (
-    err.name === "AbortError" ||
-    err.message.toLowerCase().includes("abort") ||
-    err.message.toLowerCase().includes("cancel")
-  );
+  if (typeof DOMException !== "undefined" && err instanceof DOMException) {
+    return (err as DOMException).name === "AbortError";
+  }
+  const maybe = err as { name?: unknown; code?: unknown };
+  return maybe.name === "AbortError" || maybe.code === 20;
 }
 
-// ---------------------------------------------------------------------------
-// URL / Query Strings
-// ---------------------------------------------------------------------------
-
-/**
- * Build a URL query string from a plain object, omitting `undefined` / empty values.
- *
- * @example
- * buildQueryString({ page: 1, search: 'foo', filter: undefined })
- * // '?page=1&search=foo'
- */
 export function buildQueryString(
   params: Record<string, string | number | boolean | undefined>,
 ): string {
@@ -178,14 +124,7 @@ export function buildQueryString(
   return qs ? `?${qs}` : "";
 }
 
-// ---------------------------------------------------------------------------
-// Class / Style
-// ---------------------------------------------------------------------------
-
-/**
- * Conditionally join class names — thin wrapper kept here so components
- * that don't need the full `cn` util can import from helpers instead.
- */
 export function classNames(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ");
 }
+

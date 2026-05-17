@@ -99,12 +99,7 @@ export function SearchInput({
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div
-      className={cn(
-        "relative flex items-center",
-        className,
-      )}
-    >
+    <div className={cn("relative flex items-center", className)}>
       {/* Leading search icon */}
       <Search
         className="pointer-events-none absolute left-3 size-4 text-muted-foreground"

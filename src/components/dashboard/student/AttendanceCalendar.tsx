@@ -2,7 +2,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AttendanceStatus, StudentAttendanceRecord } from "@/types";
 import { cn } from "@/lib/utils";
-import { eachDayOfInterval, endOfMonth, format, isSameMonth, isToday, parseISO, startOfMonth, startOfWeek, endOfWeek } from "date-fns";
+import {
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  isSameMonth,
+  isToday,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+  endOfWeek,
+} from "date-fns";
 
 interface AttendanceCalendarProps {
   records: StudentAttendanceRecord[];
@@ -15,9 +25,14 @@ const STATUS_TONES: Record<AttendanceStatus, string> = {
   leave: "bg-sky-500",
 };
 
-function getRecordByDate(records: StudentAttendanceRecord[], date: Date): StudentAttendanceRecord | undefined {
+function getRecordByDate(
+  records: StudentAttendanceRecord[],
+  date: Date,
+): StudentAttendanceRecord | undefined {
   const key = format(date, "yyyy-MM-dd");
-  return records.find((record) => (record.session?.session_date ?? record.marked_at.slice(0, 10)) === key);
+  return records.find(
+    (record) => (record.session?.session_date ?? record.marked_at.slice(0, 10)) === key,
+  );
 }
 
 export function AttendanceCalendar({ records }: AttendanceCalendarProps) {
@@ -36,7 +51,7 @@ export function AttendanceCalendar({ records }: AttendanceCalendarProps) {
       </CardHeader>
       <CardContent className="p-6">
         <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div key={day} className="py-2">
               {day}
             </div>
@@ -56,10 +71,17 @@ export function AttendanceCalendar({ records }: AttendanceCalendarProps) {
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className={cn("text-sm font-semibold", currentMonth ? "text-foreground" : "text-muted-foreground")}>
+                  <span
+                    className={cn(
+                      "text-sm font-semibold",
+                      currentMonth ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
                     {format(day, "d")}
                   </span>
-                  {record ? <span className={cn("size-2.5 rounded-full", STATUS_TONES[record.status])} /> : null}
+                  {record ? (
+                    <span className={cn("size-2.5 rounded-full", STATUS_TONES[record.status])} />
+                  ) : null}
                 </div>
                 {record ? (
                   <div className="mt-3 space-y-2">

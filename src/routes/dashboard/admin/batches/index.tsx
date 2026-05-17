@@ -1,940 +1,417 @@
-// ---------------------------------------------------------------------------
-// EduOS — Admin: Batch Management Page (/dashboard/admin/batches)
-// ---------------------------------------------------------------------------
-
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Plus,
-  GraduationCap,
-  AlertCircle,
-  Users,
-  Calendar,
-  Hash,
-  BookOpen,
-  MoreHorizontal,
-  Archive,
-  RefreshCw,
-  Pencil,
-  UserPlus,
-  CheckCircle2,
-  Loader2,
-  X,
-} from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, Eye, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { useAuthStore } from "@/store/authStore";
 import {
-  getBatchesWithStudentCount,
-  createBatch,
-  updateBatch,
   archiveBatch,
+  assignStudentsToBatch,
+  createBatch,
+  getBatchesByInstitute,
   restoreBatch,
-  getStudentsForBatchAssignment,
-  bulkAssignStudentsToBatch,
+  softDeleteBatch,
+  updateBatch,
 } from "@/services/batch.service";
-import type { StudentForBatchAssignment } from "@/services/batch.service";
-import { batchSchema, type BatchSchema } from "@/modules/batches/validations";
+import type { Batch, BatchStatus, CreateBatchPayload } from "@/types";
+import { BatchDetailDrawer } from "@/modules/batches/components/BatchDetailDrawer";
+import { AssignStudentsModal } from "@/modules/batches/components/AssignStudentsModal";
+import { BatchFormModal } from "@/modules/batches/components/BatchFormModal";
 import { formatDate } from "@/utils/helpers";
-import { toast } from "sonner";
-import type { Batch, Student } from "@/types";
-
-// ── Route ─────────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/dashboard/admin/batches/")({
-  head: () => ({ meta: [{ title: "Batches — EduOS" }] }),
+  head: () => ({ meta: [{ title: "Batches - EduOS" }] }),
   component: BatchesPage,
 });
 
-// ── Style constants ───────────────────────────────────────────────────────────
-
-const INPUT_CLASS =
-  "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50";
-
-const LABEL_CLASS = "block text-sm font-medium text-foreground mb-1.5";
-
-// ── BatchForm (shared Create / Edit) ─────────────────────────────────────────
-
-interface BatchFormProps {
-  title: string;
-  defaultValues?: Partial<BatchSchema>;
-  isSubmitting: boolean;
-  serverError: string | null;
-  onSubmit: (values: BatchSchema) => Promise<void>;
-  onCancel: () => void;
+function statusTone(status: BatchStatus): string {
+  if (status === "active")
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400";
+  if (status === "archived")
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400";
+  return "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 }
-
-function BatchForm({
-  title,
-  defaultValues,
-  isSubmitting,
-  serverError,
-  onSubmit,
-  onCancel,
-}: BatchFormProps) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<BatchSchema>({
-    resolver: zodResolver(batchSchema),
-    defaultValues: defaultValues ?? {
-      academic_year:
-        new Date().getFullYear() + "-" + String(new Date().getFullYear() + 1).slice(-2),
-    },
-  });
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-
-      {serverError && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
-          {serverError}
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Name */}
-        <div className="sm:col-span-2">
-          <label className={LABEL_CLASS} htmlFor="bf-name">
-            Batch Name <span className="text-destructive">*</span>
-          </label>
-          <input
-            id="bf-name"
-            type="text"
-            placeholder="e.g. JEE 2025 Morning Batch"
-            {...register("name")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-          {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name.message}</p>}
-        </div>
-
-        {/* Academic Year */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-year">
-            Academic Year <span className="text-destructive">*</span>
-          </label>
-          <input
-            id="bf-year"
-            type="text"
-            placeholder="2024-25"
-            {...register("academic_year")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-          {errors.academic_year && (
-            <p className="mt-1 text-xs text-destructive">{errors.academic_year.message}</p>
-          )}
-        </div>
-
-        {/* Batch Code */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-code">
-            Batch Code <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            id="bf-code"
-            type="text"
-            placeholder="e.g. JEE-M-2025"
-            {...register("batch_code")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* Course Name */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-course">
-            Course Name{" "}
-            <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            id="bf-course"
-            type="text"
-            placeholder="e.g. JEE Advanced"
-            {...register("course_name")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* Capacity */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-cap">
-            Capacity <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            id="bf-cap"
-            type="number"
-            min={1}
-            max={1000}
-            placeholder="e.g. 40"
-            {...register("capacity", { valueAsNumber: true })}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* Start Date */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-start">
-            Start Date <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            id="bf-start"
-            type="date"
-            {...register("start_date")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* End Date */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="bf-end">
-            End Date <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            id="bf-end"
-            type="date"
-            {...register("end_date")}
-            className={INPUT_CLASS}
-            disabled={isSubmitting}
-          />
-          {errors.end_date && (
-            <p className="mt-1 text-xs text-destructive">{errors.end_date.message}</p>
-          )}
-        </div>
-
-        {/* Description */}
-        <div className="sm:col-span-2">
-          <label className={LABEL_CLASS} htmlFor="bf-desc">
-            Description{" "}
-            <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <textarea
-            id="bf-desc"
-            rows={2}
-            placeholder="Brief description of this batch..."
-            {...register("description")}
-            className={INPUT_CLASS + " resize-none"}
-            disabled={isSubmitting}
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
-        >
-          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSubmitting ? "Saving…" : "Save Batch"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-// ── BatchCard ─────────────────────────────────────────────────────────────────
-
-interface BatchCardProps {
-  batch: Batch & { student_count?: number };
-  onEdit: (b: Batch) => void;
-  onArchive: (b: Batch) => void;
-  onRestore: (b: Batch) => void;
-  onAssign: (b: Batch) => void;
-}
-
-function BatchCard({ batch, onEdit, onArchive, onRestore, onAssign }: BatchCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  return (
-    <div
-      className={`relative rounded-xl border bg-card p-5 transition-shadow hover:shadow-md ${batch.is_active ? "border-border" : "border-border/50 opacity-70"}`}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${batch.is_active ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" : "bg-muted text-muted-foreground"}`}
-        >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${batch.is_active ? "bg-green-500" : "bg-muted-foreground"}`}
-          />
-          {batch.is_active ? "Active" : "Inactive"}
-        </span>
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-8 z-10 w-40 rounded-lg border border-border bg-card shadow-lg py-1">
-              <button
-                onClick={() => {
-                  onEdit(batch);
-                  setMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit
-              </button>
-              <button
-                onClick={() => {
-                  onAssign(batch);
-                  setMenuOpen(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted"
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Assign Students
-              </button>
-              {batch.is_active ? (
-                <button
-                  onClick={() => {
-                    onArchive(batch);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted"
-                >
-                  <Archive className="h-3.5 w-3.5" /> Archive
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    onRestore(batch);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" /> Restore
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Name + Course */}
-      <h3 className="text-sm font-semibold text-foreground leading-tight">{batch.name}</h3>
-      {batch.course_name && (
-        <p className="text-xs text-muted-foreground mt-0.5">{batch.course_name}</p>
-      )}
-      <p className="text-xs text-muted-foreground mt-0.5">{batch.academic_year}</p>
-
-      {/* Stats */}
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Users className="h-3.5 w-3.5" />
-          {batch.student_count ?? 0} students
-          {batch.capacity ? ` / ${batch.capacity}` : ""}
-        </span>
-        {batch.batch_code && (
-          <span className="flex items-center gap-1">
-            <Hash className="h-3.5 w-3.5" />
-            {batch.batch_code}
-          </span>
-        )}
-        {batch.start_date && (
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5" />
-            {formatDate(batch.start_date)}
-          </span>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mt-4 flex gap-2">
-        <button
-          onClick={() => onAssign(batch)}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-        >
-          <UserPlus className="h-3.5 w-3.5" /> Assign Students
-        </button>
-        <button
-          onClick={() => onEdit(batch)}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── AssignStudentsPanel ────────────────────────────────────────────────────────
-
-interface AssignStudentsPanelProps {
-  batch: Batch;
-  instituteId: string;
-  onClose: () => void;
-  onSuccess: (count: number) => void;
-}
-
-function AssignStudentsPanel({ batch, instituteId, onClose, onSuccess }: AssignStudentsPanelProps) {
-  const [students, setStudents] = useState<StudentForBatchAssignment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      setLoadError(null);
-
-      const res = await getStudentsForBatchAssignment(instituteId);
-      if (cancelled) return;
-
-      if (import.meta.env.DEV) {
-        console.debug("[batches] assign modal students", {
-          instituteId,
-          batchId: batch.id,
-          success: res.success,
-          count: res.data?.length,
-          error: res.error,
-        });
-      }
-
-      if (!res.success || !res.data) {
-        setStudents([]);
-        setLoadError(res.error ?? "Could not load students.");
-      } else {
-        setStudents(res.data);
-        const alreadyInBatch = res.data.filter((s) => s.batch_id === batch.id).map((s) => s.id);
-        setSelected(new Set(alreadyInBatch));
-      }
-
-      setIsLoading(false);
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [instituteId, batch.id]);
-
-  const filtered = useMemo(() => {
-    if (!search) return students;
-    const q = search.toLowerCase();
-    return students.filter(
-      (s) =>
-        s.admission_no.toLowerCase().includes(q) ||
-        (s.user?.name ?? "").toLowerCase().includes(q) ||
-        (s.user?.email ?? "").toLowerCase().includes(q),
-    );
-  }, [students, search]);
-
-  const toggleAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map((s) => s.id)));
-  };
-
-  const toggle = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleAssign = async () => {
-    if (selected.size === 0) return;
-    setIsSaving(true);
-    setError(null);
-    const result = await bulkAssignStudentsToBatch(Array.from(selected), batch.id);
-    setIsSaving(false);
-    if (!result.success) {
-      setError(result.error ?? "Assignment failed.");
-      return;
-    }
-    if ((result.data?.count ?? 0) === 0 && selected.size > 0) {
-      setError("No students were updated. Check your permissions or try again.");
-      return;
-    }
-    setSuccess(true);
-    setTimeout(() => {
-      onSuccess(result.data?.count ?? selected.size);
-    }, 1200);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-lg rounded-2xl bg-card shadow-xl max-h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border p-5">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">Assign Students</h2>
-            <p className="text-xs text-muted-foreground">to {batch.name}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {success ? (
-          <div className="flex flex-col items-center gap-3 py-10 px-6 text-center">
-            <CheckCircle2 className="h-10 w-10 text-green-500" />
-            <p className="text-sm font-medium text-foreground">
-              {selected.size} student{selected.size !== 1 ? "s" : ""} assigned to {batch.name}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="p-4 border-b border-border">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Search by name, email or admission no…"
-              />
-              <p className="text-xs text-muted-foreground">
-                Select students for this batch. You can move students from other batches.
-              </p>
-              {loadError && (
-                <p className="text-xs text-destructive" role="alert">
-                  {loadError}
-                </p>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="py-10 text-center">
-                  <p className="text-sm font-medium text-foreground">
-                    {loadError
-                      ? "Unable to load students."
-                      : students.length === 0
-                        ? "No active students in this institute."
-                        : "No students match your search."}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Select all */}
-                  <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-muted/30">
-                    <input
-                      type="checkbox"
-                      id="select-all"
-                      checked={filtered.length > 0 && selected.size === filtered.length}
-                      onChange={toggleAll}
-                      className="h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <label
-                      htmlFor="select-all"
-                      className="text-xs font-medium text-foreground cursor-pointer"
-                    >
-                      Select all ({filtered.length})
-                    </label>
-                  </div>
-                  {filtered.map((s) => (
-                    <label
-                      key={s.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(s.id)}
-                        onChange={() => toggle(s.id)}
-                        className="h-4 w-4 rounded border-border accent-primary shrink-0"
-                      />
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {(s.user?.name ?? "?").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {s.user?.name ?? "—"}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {s.admission_no} · {s.user?.email}
-                        </p>
-                        <p className="text-xs text-muted-foreground/80 truncate">
-                          {s.batch_id === batch.id
-                            ? "In this batch"
-                            : s.batch?.name
-                              ? `Currently: ${s.batch.name}`
-                              : "Unassigned"}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-border p-4 flex items-center justify-between gap-3">
-              {error && <p className="text-xs text-destructive flex-1">{error}</p>}
-              <span className="text-xs text-muted-foreground">{selected.size} selected</span>
-              <button
-                onClick={handleAssign}
-                disabled={selected.size === 0 || isSaving}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isSaving
-                  ? "Assigning…"
-                  : `Assign ${selected.size > 0 ? selected.size : ""} Students`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 function BatchesPage() {
   const { user } = useAuthStore();
-  const instituteId = user?.institute_id ?? null;
+  const instituteId = user?.institute_id ?? "";
 
-  const [batches, setBatches] = useState<(Batch & { student_count: number })[]>([]);
+  const [items, setItems] = useState<Batch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [status, setStatus] = useState<BatchStatus | "all">("all");
 
-  // Modal state
-  const [showCreate, setShowCreate] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
+
+  const [detailBatch, setDetailBatch] = useState<Batch | null>(null);
   const [assignBatch, setAssignBatch] = useState<Batch | null>(null);
-
-  // Form submission state
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchBatches = useCallback(async () => {
     if (!instituteId) return;
+
     setIsLoading(true);
     setError(null);
-    const result = await getBatchesWithStudentCount(instituteId);
-    if (result.success && result.data) setBatches(result.data);
-    else setError(result.error ?? "Failed to load batches.");
+
+    const result = await getBatchesByInstitute(instituteId, {
+      page,
+      pageSize: 10,
+      search,
+      status,
+    });
+
+    if (result.success && result.data) {
+      setItems(result.data.items);
+      setTotalPages(result.data.meta.totalPages);
+      setTotal(result.data.meta.total);
+    } else {
+      setItems([]);
+      setTotalPages(1);
+      setTotal(0);
+      setError(result.error ?? "Failed to load batches");
+    }
+
     setIsLoading(false);
-  }, [instituteId]);
+  }, [instituteId, page, search, status]);
 
   useEffect(() => {
     fetchBatches();
   }, [fetchBatches]);
 
-  // ── Filtered list ──────────────────────────────────────────────────────────
-
-  const filtered = useMemo(() => {
-    let list = batches;
-    if (statusFilter !== "all")
-      list = list.filter((b) => (statusFilter === "active" ? b.is_active : !b.is_active));
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (b) =>
-          b.name.toLowerCase().includes(q) ||
-          (b.batch_code ?? "").toLowerCase().includes(q) ||
-          (b.course_name ?? "").toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [batches, statusFilter, search]);
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
-  const handleCreate = async (values: BatchSchema) => {
-    if (!instituteId) return;
-    setIsSubmitting(true);
-    setFormError(null);
-
-    if (import.meta.env.DEV) {
-      console.debug("[batches] create payload", { ...values, institute_id: instituteId });
+  async function handleCreateOrUpdate(
+    payload: CreateBatchPayload | Partial<CreateBatchPayload>,
+  ): Promise<{ success: boolean; error: string | null }> {
+    if (!instituteId) {
+      return { success: false, error: "Institute is not available" };
     }
 
-    const result = await createBatch({ ...values, institute_id: instituteId });
-    setIsSubmitting(false);
+    if (formMode === "create") {
+      const createPayload = {
+        institute_id: instituteId,
+        ...(payload as Omit<CreateBatchPayload, "institute_id">),
+      } as CreateBatchPayload;
 
-    if (import.meta.env.DEV) {
-      console.debug("[batches] create response", result);
+      const result = await createBatch(createPayload);
+      if (!result.success) return { success: false, error: result.error };
+
+      await fetchBatches();
+      return { success: true, error: null };
     }
 
-    if (!result.success || !result.data) {
-      const message = result.error ?? "Failed to create batch.";
-      setFormError(message);
-      toast.error(message);
-      return;
+    if (!editingBatch) {
+      return { success: false, error: "No batch selected for edit" };
     }
 
-    setBatches((prev) => [{ ...result.data!, student_count: 0 }, ...prev]);
-    setShowCreate(false);
-    toast.success("Batch created successfully");
-  };
+    const updateResult = await updateBatch(editingBatch.id, payload);
+    if (!updateResult.success) return { success: false, error: updateResult.error };
 
-  const handleEdit = async (values: BatchSchema) => {
-    if (!editingBatch) return;
-    setIsSubmitting(true);
-    setFormError(null);
-    const result = await updateBatch(editingBatch.id, values);
-    setIsSubmitting(false);
-    if (!result.success || !result.data) {
-      const message = result.error ?? "Failed to update batch.";
-      setFormError(message);
-      toast.error(message);
-      return;
-    }
-    setBatches((prev) =>
-      prev.map((b) =>
-        b.id === editingBatch.id ? { ...result.data!, student_count: b.student_count } : b,
-      ),
-    );
-    setEditingBatch(null);
-    toast.success("Batch updated");
-  };
+    await fetchBatches();
+    return { success: true, error: null };
+  }
 
-  const handleArchive = async (batch: Batch) => {
+  async function handleArchive(batch: Batch) {
     const result = await archiveBatch(batch.id);
-    if (result.success)
-      setBatches((prev) => prev.map((b) => (b.id === batch.id ? { ...b, is_active: false } : b)));
-  };
+    if (!result.success) {
+      setError(result.error ?? "Failed to archive batch");
+      return;
+    }
+    fetchBatches();
+  }
 
-  const handleRestore = async (batch: Batch) => {
+  async function handleSoftDelete(batch: Batch) {
+    const result = await softDeleteBatch(batch.id);
+    if (!result.success) {
+      setError(result.error ?? "Failed to set inactive status");
+      return;
+    }
+    fetchBatches();
+  }
+
+  async function handleRestore(batch: Batch) {
     const result = await restoreBatch(batch.id);
-    if (result.success)
-      setBatches((prev) => prev.map((b) => (b.id === batch.id ? { ...b, is_active: true } : b)));
-  };
+    if (!result.success) {
+      setError(result.error ?? "Failed to restore batch");
+      return;
+    }
+    fetchBatches();
+  }
 
-  const handleAssignSuccess = (count: number) => {
-    if (assignBatch)
-      setBatches((prev) =>
-        prev.map((b) =>
-          b.id === assignBatch.id ? { ...b, student_count: (b.student_count ?? 0) + count } : b,
-        ),
-      );
-    setAssignBatch(null);
-    fetchBatches(); // refresh to get accurate counts
-  };
+  const columns: DataTableColumn<Batch>[] = [
+    {
+      key: "batch",
+      header: "Batch",
+      render: (batch) => (
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">{batch.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {batch.batch_code} • {batch.course_name}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "timeline",
+      header: "Schedule",
+      render: (batch) => (
+        <span className="text-sm text-muted-foreground">
+          {formatDate(batch.start_date)} - {formatDate(batch.end_date)}
+        </span>
+      ),
+    },
+    {
+      key: "capacity",
+      header: "Capacity",
+      render: (batch) => (
+        <span className="text-sm text-muted-foreground">
+          {batch.student_count ?? 0}/{batch.capacity}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (batch) => (
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusTone(batch.status)}`}
+        >
+          {batch.status}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      headerClassName: "w-px",
+      cellClassName: "text-right",
+      render: (batch) => (
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailBatch(batch);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFormMode("edit");
+              setEditingBatch(batch);
+              setIsFormOpen(true);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          >
+            Edit
+          </button>
+
+          {batch.status === "active" ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleArchive(batch);
+              }}
+              className="rounded-md border border-border px-2 py-1 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950"
+            >
+              Archive
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRestore(batch);
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-950"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Restore
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSoftDelete(batch);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <ProtectedRoute allowedRoles={["admin"]}>
       <PageHeader
-        title="Batches"
-        subtitle="Group students into batches for attendance and course management"
-        badge={isLoading ? "— batches" : `${batches.length} batches`}
+        title="Batch Management"
+        subtitle="Create batches, assign students, and power attendance by batch."
+        badge={`${total} batches`}
         actions={
           <button
             type="button"
             onClick={() => {
-              setFormError(null);
-              setShowCreate(true);
+              setFormMode("create");
+              setEditingBatch(null);
+              setIsFormOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="h-4 w-4" /> New Batch
+            <Plus className="h-4 w-4" />
+            Create Batch
           </button>
         }
       />
 
-      {/* Error */}
       {error && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0" />
+        <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      {/* Filters */}
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput
           value={search}
-          onChange={setSearch}
-          placeholder="Search batches…"
-          className="w-full sm:max-w-xs"
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search by batch name, code, or course..."
+          className="w-full sm:max-w-sm"
         />
+
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          value={status}
+          onChange={(e) => {
+            setStatus((e.target.value as BatchStatus | "all") ?? "all");
+            setPage(1);
+          }}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         >
           <option value="all">All statuses</option>
-          <option value="active">Active only</option>
-          <option value="inactive">Inactive only</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="archived">Archived</option>
         </select>
       </div>
 
-      {/* Content */}
       <div className="mt-4">
-        {isLoading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-5 animate-pulse">
-                <div className="h-4 w-16 bg-muted rounded mb-3" />
-                <div className="h-4 w-40 bg-muted rounded mb-2" />
-                <div className="h-3 w-24 bg-muted rounded mb-4" />
-                <div className="h-8 bg-muted rounded" />
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border bg-card py-20 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <GraduationCap className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {search || statusFilter !== "all"
-                  ? "No batches match your filters"
-                  : "No batches yet"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground max-w-xs mx-auto">
-                {search || statusFilter !== "all"
-                  ? "Try adjusting your search or filter."
-                  : "Create your first batch to start assigning students and managing attendance."}
-              </p>
-            </div>
-            {!search && statusFilter === "all" && (
-              <button
-                onClick={() => {
-                  setFormError(null);
-                  setShowCreate(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" /> Create First Batch
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((batch) => (
-              <BatchCard
-                key={batch.id}
-                batch={batch}
-                onEdit={setEditingBatch}
-                onArchive={handleArchive}
-                onRestore={handleRestore}
-                onAssign={setAssignBatch}
-              />
-            ))}
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={items}
+          isLoading={isLoading}
+          keyExtractor={(batch) => batch.id}
+          onRowClick={(batch) => setDetailBatch(batch)}
+          emptyState={
+            <EmptyState
+              title="No batches found"
+              description="Create a batch first to start attendance and grouping students."
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormMode("create");
+                    setEditingBatch(null);
+                    setIsFormOpen(true);
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Create Batch
+                </button>
+              }
+            />
+          }
+        />
       </div>
 
-      {/* Attendance CTA */}
-      {batches.length > 0 && (
-        <div className="mt-8 rounded-xl border border-border bg-card p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-              <BookOpen className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Ready to take attendance?</p>
-              <p className="text-xs text-muted-foreground">
-                Your batches are now available in the Attendance module.
-              </p>
-            </div>
-          </div>
-          <Link
-            to="/dashboard/admin/attendance"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors whitespace-nowrap"
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || isLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
           >
-            Go to Attendance →
-          </Link>
+            <ChevronLeft className="h-4 w-4" />
+            Prev
+          </button>
+
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages || isLoading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      {/* Create Modal */}
-      {showCreate && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowCreate(false);
-          }}
-        >
-          <div className="w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <BatchForm
-              title="Create New Batch"
-              isSubmitting={isSubmitting}
-              serverError={formError}
-              onSubmit={handleCreate}
-              onCancel={() => setShowCreate(false)}
-            />
-          </div>
-        </div>
-      )}
+      <BatchFormModal
+        isOpen={isFormOpen}
+        mode={formMode}
+        batch={editingBatch}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingBatch(null);
+        }}
+        onSubmitBatch={handleCreateOrUpdate}
+      />
 
-      {/* Edit Modal */}
-      {editingBatch && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditingBatch(null);
-          }}
-        >
-          <div className="w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <BatchForm
-              title={`Edit — ${editingBatch.name}`}
-              defaultValues={{
-                name: editingBatch.name,
-                academic_year: editingBatch.academic_year,
-                description: editingBatch.description ?? undefined,
-                batch_code: editingBatch.batch_code ?? undefined,
-                course_name: editingBatch.course_name ?? undefined,
-                start_date: editingBatch.start_date ?? undefined,
-                end_date: editingBatch.end_date ?? undefined,
-                capacity: editingBatch.capacity ?? undefined,
-              }}
-              isSubmitting={isSubmitting}
-              serverError={formError}
-              onSubmit={handleEdit}
-              onCancel={() => setEditingBatch(null)}
-            />
-          </div>
-        </div>
-      )}
+      <BatchDetailDrawer
+        batch={detailBatch}
+        isOpen={detailBatch !== null}
+        instituteId={instituteId}
+        onClose={() => setDetailBatch(null)}
+        onAssignStudents={() => {
+          if (detailBatch) setAssignBatch(detailBatch);
+        }}
+        onRefreshRequested={fetchBatches}
+      />
 
-      {/* Assign Students Panel */}
-      {assignBatch && instituteId && (
-        <AssignStudentsPanel
-          batch={assignBatch}
-          instituteId={instituteId}
-          onClose={() => setAssignBatch(null)}
-          onSuccess={handleAssignSuccess}
-        />
-      )}
+      <AssignStudentsModal
+        isOpen={assignBatch !== null}
+        batch={assignBatch}
+        instituteId={instituteId}
+        onClose={() => setAssignBatch(null)}
+        onAssign={async (studentIds) => {
+          if (!assignBatch) {
+            return { success: false, error: "No batch selected" };
+          }
+
+          const result = await assignStudentsToBatch(instituteId, assignBatch.id, studentIds);
+          if (!result.success) {
+            return { success: false, error: result.error ?? "Failed to assign students" };
+          }
+
+          await fetchBatches();
+          return { success: true, error: null };
+        }}
+      />
     </ProtectedRoute>
   );
 }

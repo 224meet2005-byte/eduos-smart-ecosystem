@@ -22,7 +22,11 @@ function getInitials(name?: string | null): string {
     .join("");
 }
 
-export function StudentProfileCard({ student, attendanceRate, lastUpdated }: StudentProfileCardProps) {
+export function StudentProfileCard({
+  student,
+  attendanceRate,
+  lastUpdated,
+}: StudentProfileCardProps) {
   const user = student.user;
   const emergencyContact = student.emergency_contact;
 
@@ -31,7 +35,10 @@ export function StudentProfileCard({ student, attendanceRate, lastUpdated }: Stu
       <CardHeader className="space-y-4 border-b border-border/60 bg-gradient-to-br from-background via-background to-muted/30 pb-6">
         <div className="flex items-start gap-4">
           <Avatar className="size-16 ring-2 ring-primary/10">
-            <AvatarImage src={user?.avatar_url ?? undefined} alt={user?.name ?? student.admission_no} />
+            <AvatarImage
+              src={user?.avatar_url ?? undefined}
+              alt={user?.name ?? student.admission_no}
+            />
             <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary">
               {getInitials(user?.name)}
             </AvatarFallback>
@@ -41,7 +48,9 @@ export function StudentProfileCard({ student, attendanceRate, lastUpdated }: Stu
               <CardTitle className="text-2xl">{user?.name ?? "Student profile"}</CardTitle>
               <StatusBadge status={student.status} />
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Admission No. {student.admission_no}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Admission No. {student.admission_no}
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Badge variant="secondary" className="gap-1.5">
                 <ShieldCheck className="size-3.5" />
@@ -73,7 +82,12 @@ export function StudentProfileCard({ student, attendanceRate, lastUpdated }: Stu
             <Phone className="size-4 text-primary" />
             Emergency Contact
           </div>
-          <div className={cn("space-y-1 text-sm", emergencyContact ? "text-muted-foreground" : "text-muted-foreground") }>
+          <div
+            className={cn(
+              "space-y-1 text-sm",
+              emergencyContact ? "text-muted-foreground" : "text-muted-foreground",
+            )}
+          >
             {emergencyContact ? (
               <>
                 <p className="font-medium text-foreground">{emergencyContact.name}</p>
