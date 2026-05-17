@@ -55,7 +55,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "Batches", url: "/dashboard/admin/batches", icon: BookOpen },
           { title: "Parents", url: "/dashboard/admin/parents", icon: Users },
           { title: "Staff", url: "/dashboard/admin/staff", icon: Users, comingSoon: true },
-          { title: "Courses", url: "/dashboard/admin/courses", icon: BookOpen, comingSoon: true },
+          { title: "Courses", url: "/dashboard/admin/courses", icon: BookOpen },
           { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar, comingSoon: true },
         ],
       },
@@ -107,6 +107,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
             icon: GraduationCap,
             comingSoon: true,
           },
+          { title: "My Courses", url: "/dashboard/staff/courses", icon: BookOpen },
         ],
       },
     ];
@@ -116,7 +117,11 @@ function getNavGroups(role: UserRole): NavGroup[] {
     return [
       {
         label: "My Portal",
-        items: [{ title: "Dashboard", url: "/dashboard/student", icon: LayoutDashboard }],
+        items: [
+          { title: "Dashboard", url: "/dashboard/student", icon: LayoutDashboard },
+          { title: "My Learning", url: "/dashboard/student/my-learning", icon: BookOpen },
+          { title: "Browse Courses", url: "/dashboard/student/courses", icon: GraduationCap },
+        ],
       },
     ];
   }

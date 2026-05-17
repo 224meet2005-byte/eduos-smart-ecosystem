@@ -15,6 +15,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useStudentDashboardStore } from "@/store/studentDashboardStore";
 import type { AttendanceStatus, StudentAttendanceRecord } from "@/types";
 import { AlertCircle, RefreshCw, Sparkles } from "lucide-react";
+import { StudentLearningSection } from "@/modules/courses/components/student/StudentLearningSection";
 
 export const Route = createFileRoute("/dashboard/student/")({
   head: () => ({ meta: [{ title: "Student Dashboard — EduOS" }] }),
@@ -51,16 +52,18 @@ function StudentDashboard() {
     }
 
     let cancelled = false;
+    const userId = user.id;
+    const instituteId = user.institute_id;
 
     async function loadDashboard() {
       setLoading(true);
       setWarning(null);
 
-      const response = await getCurrentStudentDashboard(user.id, user.institute_id);
+      const response = await getCurrentStudentDashboard(userId, instituteId);
       if (cancelled) return;
 
       if (response.success && response.data) {
-        setDashboard(user.id, response.data);
+        setDashboard(userId, response.data);
         setWarning(response.error);
         setError(null);
       } else {
@@ -149,18 +152,25 @@ function StudentDashboard() {
   return (
     <ProtectedRoute allowedRoles={["student"]}>
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-[2rem] border border-border/60 bg-gradient-to-br from-background via-muted/40 to-primary/10 p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <Badge variant="outline" className="gap-1.5 w-fit">
+        <section className="relative overflow-hidden rounded-[2rem] border border-border/40 bg-card p-6 md:p-10 shadow-lg">
+          {/* Decorative background blobs */}
+          <div className="absolute top-0 left-0 -ml-20 -mt-20 size-[300px] rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 right-0 -mr-20 -mb-20 size-[200px] rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-4 max-w-2xl">
+              <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-sm border-primary/20 text-primary w-fit">
                 <Sparkles className="size-3.5" />
                 Student Portal
               </Badge>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                  Welcome back, {studentName.split(" ")[0]}.
+                <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-5xl leading-tight">
+                  Welcome back,{" "}
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
+                    {studentName.split(" ")[0]}
+                  </span>.
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
+                <p className="mt-4 max-w-2xl text-base text-muted-foreground leading-relaxed">
                   View your profile, batch assignment, attendance trend, and session history in one place.
                 </p>
               </div>
@@ -205,6 +215,8 @@ function StudentDashboard() {
             </p>
           ) : null}
         </section>
+
+        {user?.id ? <StudentLearningSection studentId={user.id} /> : null}
 
         {!activeDashboard && isLoading ? (
           <div className="grid gap-6 xl:grid-cols-2">
@@ -265,10 +277,11 @@ function StudentDashboard() {
 
 function QuickMetric({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="border-border/50 bg-background/70">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+    <Card className="relative overflow-hidden border-border/50 bg-background/50 backdrop-blur-sm hover:shadow-md transition-shadow group">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <CardContent className="p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground/80">{label}</p>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
       </CardContent>
     </Card>
   );

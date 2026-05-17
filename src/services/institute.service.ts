@@ -18,6 +18,8 @@ import type { Institute, ApiResponse, SubscriptionPlan } from "@/types";
  * Intended for the super_admin dashboard only.
  */
 export async function getAllInstitutes(): Promise<ApiResponse<Institute[]>> {
+  if (!supabase) return { data: null, error: "Supabase is not configured", success: false };
+
   const { data, error } = await supabase
     .from("institutes")
     .select("*")
@@ -32,6 +34,7 @@ export async function getAllInstitutes(): Promise<ApiResponse<Institute[]>> {
  * Used on every page load to refresh tenant context.
  */
 export async function getInstituteById(id: string): Promise<ApiResponse<Institute>> {
+  if (!supabase) return { data: null, error: "Supabase is not configured", success: false };
   const { data, error } = await supabase.from("institutes").select("*").eq("id", id).single();
 
   if (error) return { data: null, error: error.message, success: false };
@@ -49,6 +52,7 @@ export async function getInstituteById(id: string): Promise<ApiResponse<Institut
 export async function createInstitute(
   payload: Pick<Institute, "name" | "logo" | "subscription_plan">,
 ): Promise<ApiResponse<Institute>> {
+  if (!supabase) return { data: null, error: "Supabase is not configured", success: false };
   const { data, error } = await supabase.from("institutes").insert(payload).select().single();
 
   if (error) return { data: null, error: error.message, success: false };
@@ -65,6 +69,7 @@ export async function updateInstitute(
   id: string,
   payload: Partial<Pick<Institute, "name" | "logo" | "subscription_plan">>,
 ): Promise<ApiResponse<Institute>> {
+  if (!supabase) return { data: null, error: "Supabase is not configured", success: false };
   const { data, error } = await supabase
     .from("institutes")
     .update(payload)

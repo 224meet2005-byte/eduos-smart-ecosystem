@@ -653,6 +653,468 @@ export interface RevenueStats {
   collection_this_month: number;
 }
 
+// ============================================================================
+// LMS — Course Management & Learning System
+// All types map directly to migration 011_course_lms_full.sql
+// ============================================================================
+
+// ── LMS Primitive Enums ──────────────────────────────────────────────────────
+
+export type LmsDifficulty = "beginner" | "intermediate" | "advanced" | "expert";
+export type LmsVisibility = "public" | "institutional" | "private";
+export type LmsPricing = "free" | "paid";
+export type LmsCourseStatus = "draft" | "published" | "archived";
+export type LmsLessonType = "video" | "pdf" | "text" | "quiz" | "assignment" | "live";
+export type LmsEnrollStatus = "active" | "completed" | "dropped" | "suspended";
+export type LmsQuizQType = "mcq" | "true_false" | "short_answer";
+export type LmsAttemptStatus = "in_progress" | "submitted" | "graded";
+export type LmsSubStatus = "submitted" | "graded" | "returned" | "late";
+
+// ── lms_categories ───────────────────────────────────────────────────────────
+
+export interface LmsCategory {
+  id: string;
+  institute_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string;
+  icon: string;
+  position: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── lms_courses ───────────────────────────────────────────────────────────────
+
+export interface LmsCourse {
+  id: string;
+  institute_id: string;
+  created_by: string;
+  category_id: string | null;
+
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  slug: string;
+
+  thumbnail_url: string | null;
+  thumbnail_storage_path: string | null;
+  intro_video_url: string | null;
+  intro_video_storage_path: string | null;
+
+  difficulty: LmsDifficulty;
+  language: string;
+  tags: string[];
+  estimated_duration_mins: number;
+
+  visibility: LmsVisibility;
+  pricing: LmsPricing;
+  price: number;
+
+  total_modules: number;
+  total_lessons: number;
+  total_enrollments: number;
+  total_completions: number;
+
+  status: LmsCourseStatus;
+  is_featured: boolean;
+  published_at: string | null;
+
+  prerequisites: string[];
+  learning_outcomes: string[];
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  category?: LmsCategory;
+  creator?: { id: string; name: string; profile_image?: string | null };
+}
+
+// ── lms_modules ───────────────────────────────────────────────────────────────
+
+export interface LmsModule {
+  id: string;
+  course_id: string;
+  institute_id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+
+  // optional join
+  lessons?: LmsLesson[];
+}
+
+// ── lms_lessons ───────────────────────────────────────────────────────────────
+
+export interface LmsLesson {
+  id: string;
+  module_id: string;
+  course_id: string;
+  institute_id: string;
+
+  title: string;
+  description: string | null;
+  lesson_type: LmsLessonType;
+  position: number;
+
+  is_preview: boolean;
+  is_published: boolean;
+
+  video_url: string | null;
+  video_storage_path: string | null;
+  video_duration_secs: number;
+
+  content: string | null;
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  materials?: LmsLessonMaterial[];
+  progress?: LmsLessonProgress; // current student's progress
+}
+
+// ── lms_lesson_materials ──────────────────────────────────────────────────────
+
+export interface LmsLessonMaterial {
+  id: string;
+  lesson_id: string;
+  course_id: string;
+  institute_id: string;
+  uploaded_by: string;
+
+  title: string;
+  file_url: string;
+  storage_path: string;
+  file_type: string;
+  file_size_bytes: number;
+  is_downloadable: boolean;
+
+  created_at: string;
+}
+
+// ── lms_enrollments ───────────────────────────────────────────────────────────
+
+export interface LmsEnrollment {
+  id: string;
+  course_id: string;
+  student_id: string;
+  institute_id: string;
+  enrolled_by: string | null;
+  batch_id: string | null;
+
+  status: LmsEnrollStatus;
+  enrolled_at: string;
+  completed_at: string | null;
+  dropped_at: string | null;
+  expires_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  course?: LmsCourse;
+  student?: { id: string; name: string; profile_image?: string | null; email: string };
+  progress?: LmsCourseProgress;
+}
+
+// ── lms_lesson_progress ───────────────────────────────────────────────────────
+
+export interface LmsLessonProgress {
+  id: string;
+  enrollment_id: string;
+  lesson_id: string;
+  student_id: string;
+  course_id: string;
+  institute_id: string;
+
+  is_completed: boolean;
+  watch_seconds: number;
+  last_position_secs: number;
+  last_accessed_at: string | null;
+  completed_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+// ── lms_course_progress ───────────────────────────────────────────────────────
+
+export interface LmsCourseProgress {
+  enrollment_id: string;
+  student_id: string;
+  course_id: string;
+  institute_id: string;
+
+  completed_lessons: number;
+  total_lessons: number;
+  completion_pct: number; // 0.00 – 100.00
+  total_watch_seconds: number;
+  last_lesson_id: string | null;
+  last_accessed_at: string | null;
+  updated_at: string;
+}
+
+// ── lms_quizzes ───────────────────────────────────────────────────────────────
+
+export interface LmsQuiz {
+  id: string;
+  course_id: string;
+  lesson_id: string | null;
+  institute_id: string;
+  created_by: string;
+
+  title: string;
+  description: string | null;
+  time_limit_mins: number | null;
+  passing_score: number;
+  max_attempts: number;
+  shuffle_questions: boolean;
+  show_answers: boolean;
+  is_published: boolean;
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  questions?: LmsQuizQuestion[];
+}
+
+// ── lms_quiz_questions ────────────────────────────────────────────────────────
+
+export interface LmsQuizQuestion {
+  id: string;
+  quiz_id: string;
+  question: string;
+  question_type: LmsQuizQType;
+  points: number;
+  position: number;
+  explanation: string | null;
+  created_at: string;
+
+  // optional joins
+  choices?: LmsQuizChoice[];
+}
+
+// ── lms_quiz_choices ──────────────────────────────────────────────────────────
+
+export interface LmsQuizChoice {
+  id: string;
+  question_id: string;
+  choice_text: string;
+  is_correct: boolean;
+  position: number;
+}
+
+// ── lms_quiz_attempts ─────────────────────────────────────────────────────────
+
+export interface LmsQuizAttempt {
+  id: string;
+  quiz_id: string;
+  enrollment_id: string;
+  student_id: string;
+  institute_id: string;
+
+  score: number;
+  max_score: number;
+  percentage: number;
+  passed: boolean;
+  attempt_no: number;
+
+  status: LmsAttemptStatus;
+  started_at: string;
+  submitted_at: string | null;
+
+  created_at: string;
+
+  // optional joins
+  answers?: LmsQuizAttemptAnswer[];
+}
+
+// ── lms_quiz_attempt_answers ──────────────────────────────────────────────────
+
+export interface LmsQuizAttemptAnswer {
+  id: string;
+  attempt_id: string;
+  question_id: string;
+  selected_choice_id: string | null;
+  text_answer: string | null;
+  is_correct: boolean;
+  points_earned: number;
+}
+
+// ── lms_assignments ───────────────────────────────────────────────────────────
+
+export interface LmsAssignment {
+  id: string;
+  course_id: string;
+  lesson_id: string | null;
+  institute_id: string;
+  created_by: string;
+
+  title: string;
+  description: string | null;
+  instructions: string | null;
+  attachment_urls: string[];
+  due_date: string | null;
+  max_score: number;
+  allow_late: boolean;
+  is_published: boolean;
+  accepted_file_types: string[];
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  submission?: LmsAssignmentSubmission; // current student's submission
+}
+
+// ── lms_assignment_submissions ────────────────────────────────────────────────
+
+export interface LmsAssignmentSubmission {
+  id: string;
+  assignment_id: string;
+  enrollment_id: string;
+  student_id: string;
+  institute_id: string;
+
+  file_urls: string[];
+  storage_paths: string[];
+  text_response: string | null;
+
+  status: LmsSubStatus;
+  submitted_at: string;
+  is_late: boolean;
+
+  grade: number | null;
+  feedback: string | null;
+  graded_by: string | null;
+  graded_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+
+  // optional joins
+  student?: { id: string; name: string; email: string };
+}
+
+// ── lms_certificates ──────────────────────────────────────────────────────────
+
+export interface LmsCertificate {
+  id: string;
+  enrollment_id: string;
+  student_id: string;
+  course_id: string;
+  institute_id: string;
+
+  certificate_no: string;
+  certificate_url: string | null;
+  certificate_data: Record<string, unknown>;
+
+  issued_at: string;
+  expires_at: string | null;
+}
+
+// ── Compound / view types ─────────────────────────────────────────────────────
+
+/** Full course with modules + lessons (used in player & editor) */
+export interface LmsCourseWithCurriculum extends LmsCourse {
+  modules: (LmsModule & { lessons: LmsLesson[] })[];
+}
+
+/** Enrollment with nested course + progress (used in student My-Learning) */
+export interface LmsEnrollmentWithProgress extends Omit<LmsEnrollment, "progress"> {
+  course: LmsCourse;
+  progress: LmsCourseProgress | null;
+}
+
+/** Admin/staff analytics summary (returned by get_lms_course_analytics RPC) */
+export interface LmsCourseAnalytics {
+  total_enrollments: number;
+  active_enrollments: number;
+  completions: number;
+  avg_completion_pct: number;
+  avg_quiz_score: number;
+  total_submissions: number;
+}
+
+// ── Payload types (used by forms / wizard) ────────────────────────────────────
+
+export interface CreateCoursePayload {
+  title: string;
+  subtitle?: string;
+  description?: string;
+  category_id?: string;
+  difficulty: LmsDifficulty;
+  language: string;
+  tags: string[];
+  estimated_duration_mins: number;
+  visibility: LmsVisibility;
+  pricing: LmsPricing;
+  price: number;
+  prerequisites: string[];
+  learning_outcomes: string[];
+}
+
+export interface CreateModulePayload {
+  course_id: string;
+  title: string;
+  description?: string;
+  position: number;
+}
+
+export interface CreateLessonPayload {
+  module_id: string;
+  course_id: string;
+  title: string;
+  description?: string;
+  lesson_type: LmsLessonType;
+  position: number;
+  is_preview: boolean;
+  is_published?: boolean;
+  content?: string;
+}
+
+export interface EnrollStudentsPayload {
+  course_id: string;
+  student_ids: string[];
+  batch_id?: string;
+}
+
+export interface UpdateProgressPayload {
+  enrollment_id: string;
+  lesson_id: string;
+  watch_seconds?: number;
+  last_position_secs?: number;
+  is_completed?: boolean;
+}
+
+export interface SubmitQuizPayload {
+  quiz_id: string;
+  enrollment_id: string;
+  answers: { question_id: string; selected_choice_id?: string; text_answer?: string }[];
+}
+
+export interface SubmitAssignmentPayload {
+  assignment_id: string;
+  enrollment_id: string;
+  file_urls?: string[];
+  storage_paths?: string[];
+  text_response?: string;
+}
+
+export interface GradeSubmissionPayload {
+  submission_id: string;
+  grade: number;
+  feedback?: string;
+}
+
 // ── Security Events ───────────────────────────────────────────────────────────
 
 export type SecurityEventType =

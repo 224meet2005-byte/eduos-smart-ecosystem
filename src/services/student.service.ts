@@ -354,23 +354,7 @@ export async function getStudentHistory(studentId: string): Promise<ApiResponse<
   return { data: data as StudentHistory[], error: null, success: true };
 }
 
-/**
- * Return all active batches for a given institute.
- * Used to populate batch selectors in the admission and student-edit forms.
- */
-export async function getBatchesByInstitute(instituteId: string): Promise<ApiResponse<Batch[]>> {
-  if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase
-    .from("batches")
-    .select("*")
-    .eq("institute_id", instituteId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Batch[], error: null, success: true };
-}
 
 /**
  * Return a student with all currently linked parents.

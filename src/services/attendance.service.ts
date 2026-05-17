@@ -412,7 +412,7 @@ export async function getStudentAttendanceStats(
   filters?: { dateFrom?: string; dateTo?: string },
 ): Promise<ApiResponse<StudentAttendanceStats>> {
   const historyResponse = await getStudentAttendanceHistory(studentId, filters);
-  if (!historyResponse.success) return historyResponse as ApiResponse<StudentAttendanceStats>;
+  if (!historyResponse.success) return historyResponse as unknown as ApiResponse<StudentAttendanceStats>;
 
   const history = historyResponse.data ?? [];
   const totalSessions = history.length;

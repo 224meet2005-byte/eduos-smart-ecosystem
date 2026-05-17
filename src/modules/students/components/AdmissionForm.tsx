@@ -129,7 +129,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       parent_phone: values.parentPhone?.trim() || null,
       parent_occupation: values.parentOccupation?.trim() || null,
       parent_relation_type:
-        values.parentRelationType && values.parentRelationType !== ""
+        values.parentRelationType && (values.parentRelationType as string) !== ""
           ? values.parentRelationType
           : null,
     };

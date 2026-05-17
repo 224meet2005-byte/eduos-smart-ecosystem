@@ -21,13 +21,23 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "staff:update",
     "staff:delete",
     "parents:read",
+    "lms:courses:manage",
+    "lms:courses:enroll",
+    "lms:analytics:read",
   ],
 
-  staff: ["students:read", "parents:read", "staff:read"],
+  staff: [
+    "students:read",
+    "parents:read",
+    "staff:read",
+    "lms:courses:manage:own",
+    "lms:courses:enroll",
+    "lms:analytics:read:own",
+  ],
 
-  student: ["students:read:own"],
+  student: ["students:read:own", "lms:courses:learn", "lms:progress:write"],
 
-  parent: ["students:read:linked", "parents:read:own"],
+  parent: ["students:read:linked", "parents:read:own", "lms:progress:read:linked"],
 };
 
 // ---------------------------------------------------------------------------
