@@ -51,6 +51,8 @@ interface StudentRow {
 interface BatchRow {
   id: string;
   name: string;
+  academic_year: string;
+  course_name: string | null;
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -92,8 +94,9 @@ export function EnrollmentManager({
 
     const fetchBatches = supabase
       .from("batches")
-      .select("id, name")
+      .select("id, name, academic_year, course_name")
       .eq("institute_id", instituteId)
+      .eq("is_active", true)
       .order("name", { ascending: true })
       .then(({ data }) => setBatches((data as BatchRow[]) ?? []));
 
@@ -332,7 +335,12 @@ export function EnrollmentManager({
                   <SelectContent>
                     {batches.map((batch) => (
                       <SelectItem key={batch.id} value={batch.id}>
-                        {batch.name}
+                        <div className="flex flex-col py-0.5">
+                          <span className="font-medium">{batch.name}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
+                            {batch.academic_year} • {batch.course_name || "General"}
+                          </span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

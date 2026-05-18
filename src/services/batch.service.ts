@@ -63,21 +63,22 @@ function mapBatchRow(row: Batch): Batch {
 export async function createBatch(payload: CreateBatchPayload): Promise<ApiResponse<Batch>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const batchCode = payload.batch_code?.trim().toUpperCase() || toBatchCode(payload.batch_name);
+  const batchCode = payload.batch_code?.trim().toUpperCase() || toBatchCode(payload.name);
 
   const { data, error } = await supabase
     .from("batches")
     .insert({
       institute_id: payload.institute_id,
-      name: payload.batch_name.trim(),
+      course_id: payload.course_id ?? null,
+      name: payload.name.trim(),
       batch_code: batchCode,
-      course_name: payload.course_name.trim(),
+      course_name: (payload.course_name ?? "").trim(),
       start_date: payload.start_date,
       end_date: payload.end_date,
       capacity: payload.capacity,
-      status: payload.status,
+      status: payload.status ?? "active",
       academic_year: payload.academic_year.trim(),
-      is_active: payload.status === "active",
+      is_active: (payload.status ?? "active") === "active",
       archived_at: payload.status === "archived" ? new Date().toISOString() : null,
     })
     .select("*")
@@ -96,7 +97,8 @@ export async function updateBatch(
 
   const updates: Record<string, unknown> = {};
 
-  if (payload.batch_name !== undefined) updates.name = payload.batch_name.trim();
+  if (payload.course_id !== undefined) updates.course_id = payload.course_id;
+  if (payload.name !== undefined) updates.name = payload.name.trim();
   if (payload.batch_code !== undefined)
     updates.batch_code = payload.batch_code.trim().toUpperCase();
   if (payload.course_name !== undefined) updates.course_name = payload.course_name.trim();

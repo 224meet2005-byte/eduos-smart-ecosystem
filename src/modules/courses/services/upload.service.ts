@@ -177,8 +177,12 @@ export function getLessonMaterialSignedUrl(storagePath: string): Promise<ApiResp
   return getSignedUrl(LMS_STORAGE_BUCKETS.materials, storagePath);
 }
 
+export function getAssignmentResourceSignedUrl(storagePath: string): Promise<ApiResponse<string>> {
+  return getSignedUrl(LMS_STORAGE_BUCKETS.assignment_resources, storagePath);
+}
+
 export function getSubmissionSignedUrl(storagePath: string): Promise<ApiResponse<string>> {
-  return getSignedUrl(LMS_STORAGE_BUCKETS.submissions, storagePath);
+  return getSignedUrl(LMS_STORAGE_BUCKETS.assignment_submissions, storagePath);
 }
 
 // ── uploadCourseThumbnail ─────────────────────────────────────────────────────
@@ -303,22 +307,67 @@ export async function uploadLessonMaterial(
 
 // ── uploadAssignmentSubmission ────────────────────────────────────────────────
 
-export async function uploadAssignmentSubmission(
-  file: File,
-  studentId: string,
-  assignmentId: string,
+/**
+ * Upload an assignment resource (Admin)
+ */
+export async function uploadAssignmentResource(
   instituteId: string,
-): Promise<ApiResponse<{ path: string }>> {
+  assignmentId: string,
+  file: File,
+  onProgress?: (p: number) => void,
+): Promise<ApiResponse<{ url: string; path: string }>> {
   if (!supabase) return NOT_CONFIGURED;
 
-  const ext = file.name.split(".").pop() ?? "bin";
-  const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const path = `${instituteId}/assignments/${assignmentId}/${studentId}/${uniqueName}`;
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
+  const storagePath = `${instituteId}/assignments/${assignmentId}/resources/${fileName}`;
 
-  const { error } = await supabase.storage
-    .from(LMS_STORAGE_BUCKETS.submissions)
-    .upload(path, file, { upsert: false, contentType: resolveFileMimeType(file) });
+  const res = await uploadWithProgress(
+    LMS_STORAGE_BUCKETS.assignment_resources,
+    storagePath,
+    file,
+    { upsert: true, contentType: resolveFileMimeType(file) },
+    onProgress,
+  );
 
-  if (error) return { data: null, error: error.message, success: false };
-  return { data: { path }, error: null, success: true };
+  if (!res.success) return { data: null, error: res.error, success: false };
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(LMS_STORAGE_BUCKETS.assignment_resources).getPublicUrl(storagePath);
+
+  return { data: { url: publicUrl, path: storagePath }, error: null, success: true };
+}
+
+/**
+ * Upload a student submission file
+ */
+export async function uploadSubmissionFile(
+  instituteId: string,
+  assignmentId: string,
+  studentId: string,
+  file: File,
+  onProgress?: (p: number) => void,
+): Promise<ApiResponse<{ url: string; path: string }>> {
+  if (!supabase) return NOT_CONFIGURED;
+
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
+  const storagePath = `${instituteId}/assignments/${assignmentId}/submissions/${studentId}/${fileName}`;
+
+  const res = await uploadWithProgress(
+    LMS_STORAGE_BUCKETS.assignment_submissions,
+    storagePath,
+    file,
+    { upsert: true, contentType: resolveFileMimeType(file) },
+    onProgress,
+  );
+
+  if (!res.success) return { data: null, error: res.error, success: false };
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(LMS_STORAGE_BUCKETS.assignment_submissions).getPublicUrl(storagePath);
+
+  return { data: { url: publicUrl, path: storagePath }, error: null, success: true };
 }

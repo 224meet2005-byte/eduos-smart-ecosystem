@@ -375,6 +375,7 @@ function BatchesPage() {
         isOpen={isFormOpen}
         mode={formMode}
         batch={editingBatch}
+        instituteId={instituteId}
         onClose={() => {
           setIsFormOpen(false);
           setEditingBatch(null);

@@ -19,7 +19,7 @@ export type SubscriptionPlan = "free" | "basic" | "pro" | "enterprise";
 
 export type StudentStatus = "active" | "inactive" | "graduated" | "suspended";
 
-export type BatchStatus = "active" | "inactive";
+export type BatchStatus = "active" | "inactive" | "archived";
 
 export type RelationType = "father" | "mother" | "guardian" | "sibling" | "other";
 
@@ -356,6 +356,7 @@ export interface Batch {
 
 export interface CreateBatchPayload {
   institute_id: string;
+  course_id?: string | null;
   name: string;
   academic_year: string;
   description?: string;
@@ -364,9 +365,11 @@ export interface CreateBatchPayload {
   start_date?: string;
   end_date?: string;
   capacity?: number;
+  status?: BatchStatus;
 }
 
 export interface UpdateBatchPayload {
+  course_id?: string | null;
   name?: string;
   academic_year?: string;
   description?: string;
@@ -376,6 +379,7 @@ export interface UpdateBatchPayload {
   end_date?: string;
   capacity?: number;
   is_active?: boolean;
+  status?: BatchStatus;
 }
 
 // ── Extended / Derived Types ─────────────────────────────────────────────────
@@ -1789,3 +1793,84 @@ export interface TeacherStudentsListResponse {
     total_pages: number;
   };
 }
+
+// ── Assignment Management System ──────────────────────────────────────────────
+
+export type AssignmentStatus = "draft" | "published" | "archived";
+export type SubmissionStatus = "pending" | "submitted" | "late" | "reviewed" | "graded";
+
+export interface Assignment {
+  id: string;
+  institute_id: string;
+  created_by: string;
+  title: string;
+  description: string | null;
+  instructions: string | null;
+  total_marks: number;
+  due_date: string | null;
+  status: AssignmentStatus;
+  allow_late: boolean;
+  created_at: string;
+  updated_at: string;
+  
+  // Joined/Computed
+  resources?: AssignmentResource[];
+  assignees_count?: number;
+  submissions_count?: number;
+}
+
+export interface AssignmentResource {
+  id: string;
+  assignment_id: string;
+  institute_id: string;
+  file_name: string;
+  file_url: string;
+  storage_path: string;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignment_id: string;
+  student_id: string;
+  institute_id: string;
+  content: string | null;
+  status: SubmissionStatus;
+  submitted_at: string;
+  is_late: boolean;
+  grade: number | null;
+  feedback: string | null;
+  graded_at: string | null;
+  graded_by: string | null;
+  
+  // Joined
+  assignment?: Assignment;
+  student?: Student;
+  files?: SubmissionFile[];
+}
+
+export interface SubmissionFile {
+  id: string;
+  submission_id: string;
+  institute_id: string;
+  file_name: string;
+  file_url: string;
+  storage_path: string;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_at: string;
+}
+
+export interface CreateAssignmentPayload {
+  title: string;
+  description?: string;
+  instructions?: string;
+  total_marks?: number;
+  due_date?: string | null;
+  status?: AssignmentStatus;
+  allow_late?: boolean;
+}
+

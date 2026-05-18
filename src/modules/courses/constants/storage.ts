@@ -5,9 +5,10 @@
 
 export const LMS_STORAGE_BUCKETS = {
   videos: "lms-course-videos",
-  materials: "lms-course-materials",
-  thumbnails: "lms-thumbnails",
-  submissions: "lms-assignment-submissions",
+  materials: "lms-lesson-materials",
+  thumbnails: "lms-course-thumbnails",
+  assignment_resources: "assignment-resources",
+  assignment_submissions: "assignment-submissions",
 } as const;
 
 export type LmsStorageBucket = (typeof LMS_STORAGE_BUCKETS)[keyof typeof LMS_STORAGE_BUCKETS];

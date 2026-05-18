@@ -8,9 +8,10 @@
  *   - node scripts/run_migration.js supabase/migrations/008_parent_admission_integration.sql
  */
 
-const fs = require("fs");
-const path = require("path");
-const { Client } = require("pg");
+import fs from "fs";
+import path from "path";
+import pkg from "pg";
+const { Client } = pkg;
 
 async function main() {
   const fileArg = process.argv[2] || "supabase/migrations/008_parent_admission_integration.sql";

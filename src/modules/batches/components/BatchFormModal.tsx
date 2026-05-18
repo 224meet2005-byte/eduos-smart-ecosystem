@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, BookOpen } from "lucide-react";
 
 import {
   batchSchema as batchFormSchema,
   type BatchSchema as BatchFormSchema,
 } from "@/modules/batches/validations";
-import type { Batch, CreateBatchPayload } from "@/types";
+import type { Batch, CreateBatchPayload, LmsCourse } from "@/types";
+import { listCourses } from "@/modules/courses/services/course.service";
 
 interface BatchFormModalProps {
   isOpen: boolean;
   mode: "create" | "edit";
   batch?: Batch | null;
+  instituteId: string;
   onClose: () => void;
   onSubmitBatch: (payload: CreateBatchPayload | Partial<CreateBatchPayload>) => Promise<{
     success: boolean;
@@ -42,11 +44,13 @@ function defaultValues(batch?: Batch | null): BatchFormSchema {
   return {
     name: batch?.name ?? "",
     batch_code: batch?.batch_code ?? "",
+    course_id: batch?.course_id ?? null,
     course_name: batch?.course_name ?? "",
     start_date: start,
     end_date: batch?.end_date ?? start,
     capacity: batch?.capacity ?? 60,
     academic_year: batch?.academic_year ?? deriveAcademicYear(start),
+    status: (batch?.status as any) ?? "active",
   };
 }
 
@@ -54,10 +58,26 @@ export function BatchFormModal({
   isOpen,
   mode,
   batch,
+  instituteId,
   onClose,
   onSubmitBatch,
 }: BatchFormModalProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<LmsCourse[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !instituteId) return;
+
+    setLoadingCourses(true);
+    listCourses(instituteId, { pageSize: 100, status: "published" })
+      .then((res) => {
+        if (res.success && res.data) {
+          setCourses(res.data.items);
+        }
+      })
+      .finally(() => setLoadingCourses(false));
+  }, [isOpen, instituteId]);
 
   const defaults = useMemo(() => defaultValues(batch), [batch]);
 
@@ -74,6 +94,17 @@ export function BatchFormModal({
   });
 
   const startDate = watch("start_date");
+  const selectedCourseId = watch("course_id");
+
+  // When course is selected, auto-fill course_name if empty
+  useEffect(() => {
+    if (selectedCourseId) {
+      const course = courses.find((c) => c.id === selectedCourseId);
+      if (course) {
+        setValue("course_name", course.title, { shouldDirty: true });
+      }
+    }
+  }, [selectedCourseId, courses, setValue]);
 
   useEffect(() => {
     reset(defaults);
@@ -86,17 +117,19 @@ export function BatchFormModal({
     }
   }, [mode, setValue, startDate]);
 
-  async function onSubmit(values: BatchFormSchema) {
+  async function onSubmit(values: BatchSchema) {
     setServerError(null);
 
     const payload = {
       name: values.name.trim(),
       batch_code: (values.batch_code ?? "").trim().toUpperCase() || undefined,
+      course_id: values.course_id,
       course_name: (values.course_name ?? "").trim() || undefined,
       start_date: values.start_date,
       end_date: values.end_date,
       capacity: values.capacity ? Number(values.capacity) : undefined,
       academic_year: values.academic_year.trim(),
+      status: values.status,
     };
 
     const result = await onSubmitBatch(payload);
@@ -194,9 +227,43 @@ export function BatchFormModal({
             )}
           </div>
 
+          <div className="md:col-span-2">
+            <label htmlFor="course_id" className={LABEL_CLASS}>
+              Linked LMS Course (Optional)
+            </label>
+            <div className="relative">
+              <select
+                id="course_id"
+                {...register("course_id")}
+                className={`${INPUT_CLASS} appearance-none pr-10`}
+                disabled={loadingCourses}
+              >
+                <option value="">No course link</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+                {loadingCourses ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <BookOpen className="h-4 w-4" />
+                )}
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Linking to a course helps automate enrollment and progress tracking.
+            </p>
+            {errors.course_id && (
+              <p className="mt-1 text-xs text-destructive">{errors.course_id.message}</p>
+            )}
+          </div>
+
           <div>
-            <label htmlFor="start_date" className={LABEL_CLASS}>
-              Start Date
+            <label htmlFor="course_name" className={LABEL_CLASS}>
+              Display Course Name
             </label>
             <input
               id="start_date"
