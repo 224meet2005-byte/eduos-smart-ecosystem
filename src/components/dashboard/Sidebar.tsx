@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuthStore } from "@/store/authStore";
 import { getInitials } from "@/utils/helpers";
@@ -17,6 +18,13 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { UserRole } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -132,7 +140,11 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "My Learning", url: "/dashboard/student/my-learning", icon: BookOpen },
           { title: "Assignments", url: "/dashboard/student/assignments", icon: FileText },
           { title: "Browse Courses", url: "/dashboard/student/courses", icon: GraduationCap },
-          { title: "Progress Tracker", url: "/dashboard/student/study-logs", icon: LayoutDashboard },
+          {
+            title: "Progress Tracker",
+            url: "/dashboard/student/study-logs",
+            icon: LayoutDashboard,
+          },
         ],
       },
     ];
@@ -153,7 +165,15 @@ function getNavGroups(role: UserRole): NavGroup[] {
 // ---------------------------------------------------------------------------
 // DashboardSidebar
 // ---------------------------------------------------------------------------
-export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
+export function DashboardSidebar({
+  collapsed,
+  mobileOpen,
+  onMobileOpenChange,
+}: {
+  collapsed: boolean;
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
+}) {
   const currentPath = useRouterState({ select: (s) => s.location.pathname });
   const { institute, user } = useAuthStore();
 
@@ -162,21 +182,15 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
   const instituteInitials = getInitials(instituteName);
   const groups = getNavGroups(role);
 
-  return (
-    <aside
-      className={cn(
-        "sticky top-0 z-30 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 md:flex md:flex-col",
-        collapsed ? "w-[72px]" : "w-[260px]",
-      )}
-    >
-      {/* ── Brand ─────────────────────────────────────────────────────────── */}
+  const navigation = (
+    <>
       <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-4">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
           <span className="text-xs font-bold text-primary-foreground">{instituteInitials}</span>
         </div>
         {!collapsed && (
-          <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-sm font-semibold truncate max-w-40" title={instituteName}>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="max-w-40 truncate text-sm font-semibold" title={instituteName}>
               {instituteName}
             </span>
             <span className="text-[10px] text-muted-foreground">EduOS Platform</span>
@@ -184,13 +198,12 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
         )}
       </div>
 
-      {/* ── Institute switcher ────────────────────────────────────────────── */}
       {!collapsed && (
         <div className="border-b border-sidebar-border px-4 py-3">
-          <button className="flex w-full items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-left text-xs hover:bg-accent/10 transition-colors">
+          <button className="flex w-full items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-left text-xs transition-colors hover:bg-accent/10">
             <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate" title={instituteName}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium" title={instituteName}>
                 {instituteName}
               </div>
               <div className="text-[10px] text-muted-foreground">Switch institute</div>
@@ -199,7 +212,6 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
         </div>
       )}
 
-      {/* ── Navigation ────────────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {groups.map((g) => (
           <div key={g.label} className="mb-6">
@@ -216,18 +228,17 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
                     : currentPath.startsWith(item.url);
 
                 if (item.comingSoon) {
-                  // Disabled placeholder for future modules
                   return (
                     <li key={item.title}>
                       <div
                         title={collapsed ? `${item.title} (coming soon)` : undefined}
-                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-40 cursor-not-allowed select-none"
+                        className="flex cursor-not-allowed select-none items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-40"
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
                         {!collapsed && (
                           <span className="flex-1 truncate">
                             {item.title}
-                            <span className="ml-2 text-[9px] tracking-wider uppercase opacity-70">
+                            <span className="ml-2 text-[9px] uppercase tracking-wider opacity-70">
                               soon
                             </span>
                           </span>
@@ -242,10 +253,11 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
                     <Link
                       to={item.url}
                       title={collapsed ? item.title : undefined}
+                      onClick={() => onMobileOpenChange(false)}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all",
                         active
-                          ? "bg-primary/10 text-foreground font-medium"
+                          ? "bg-primary/10 font-medium text-foreground"
                           : "text-muted-foreground hover:bg-accent/10 hover:text-foreground",
                       )}
                     >
@@ -263,16 +275,46 @@ export function DashboardSidebar({ collapsed }: { collapsed: boolean }) {
         ))}
       </nav>
 
-      {/* ── Settings ──────────────────────────────────────────────────────── */}
       <div className="border-t border-sidebar-border p-3">
         <div
           title={collapsed ? "Settings (coming soon)" : undefined}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-50 cursor-not-allowed"
+          className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-50"
         >
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && <span>Settings</span>}
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside
+        className={cn(
+          "sticky top-0 z-30 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 md:flex md:flex-col",
+          collapsed ? "w-[72px]" : "w-[260px]",
+        )}
+      >
+        {navigation}
+      </aside>
+
+      <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
+        <SheetContent
+          side="left"
+          className="w-[var(--sidebar-width)] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+          style={
+            {
+              "--sidebar-width": "min(18rem, calc(100vw - 1rem))",
+            } as React.CSSProperties
+          }
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation menu</SheetTitle>
+            <SheetDescription>Dashboard navigation drawer for mobile and tablets.</SheetDescription>
+          </SheetHeader>
+          <div className="flex h-full flex-col">{navigation}</div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

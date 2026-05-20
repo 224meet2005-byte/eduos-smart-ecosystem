@@ -43,6 +43,7 @@ $$;
 -- Institute-wide KPI bundle
 CREATE OR REPLACE FUNCTION public.get_institute_analytics_overview(
   p_institute_id UUID,
+  p_batch_id UUID DEFAULT NULL,
   p_date_from DATE DEFAULT (CURRENT_DATE - INTERVAL '30 days')::DATE,
   p_date_to DATE DEFAULT CURRENT_DATE
 )
@@ -70,11 +71,15 @@ BEGIN
   FROM public.attendance_records ar
   JOIN public.attendance_sessions s ON s.id = ar.session_id
   WHERE s.institute_id = p_institute_id
+    AND (p_batch_id IS NULL OR s.batch_id = p_batch_id)
     AND s.session_date BETWEEN p_date_from AND p_date_to;
 
   SELECT COALESCE(SUM(fp.amount), 0) INTO v_collected
   FROM public.fee_payments fp
+  JOIN public.student_fees sf ON sf.id = fp.student_fee_id
+  JOIN public.students st ON st.id = sf.student_id
   WHERE fp.institute_id = p_institute_id
+    AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
     AND fp.payment_date BETWEEN p_date_from AND p_date_to;
 
   SELECT
@@ -82,6 +87,7 @@ BEGIN
     COALESCE(SUM(GREATEST(sf.final_amount - COALESCE(paid.total, 0), 0)) FILTER (WHERE sf.status = 'overdue'), 0)
   INTO v_pending, v_overdue
   FROM public.student_fees sf
+  JOIN public.students st ON st.id = sf.student_id
   LEFT JOIN (
     SELECT student_fee_id, SUM(amount) AS total
     FROM public.fee_payments
@@ -92,19 +98,61 @@ BEGIN
 
   RETURN jsonb_build_object(
     'students', jsonb_build_object(
-      'total', (SELECT COUNT(*) FROM public.students WHERE institute_id = p_institute_id),
-      'active', (SELECT COUNT(*) FROM public.students WHERE institute_id = p_institute_id AND status = 'active')
+      'total', (
+        SELECT COUNT(*)
+        FROM public.students
+        WHERE institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR batch_id = p_batch_id)
+      ),
+      'active', (
+        SELECT COUNT(*)
+        FROM public.students
+        WHERE institute_id = p_institute_id
+          AND status = 'active'
+          AND (p_batch_id IS NULL OR batch_id = p_batch_id)
+      )
     ),
     'staff', jsonb_build_object(
-      'total', (SELECT COUNT(*) FROM public.staff WHERE institute_id = p_institute_id AND COALESCE(is_active, TRUE)),
-      'assignments', (SELECT COUNT(*) FROM public.staff_assignments WHERE institute_id = p_institute_id)
+      'total', (
+        SELECT COUNT(DISTINCT sa.staff_id)
+        FROM public.staff_assignments sa
+        JOIN public.staff s ON s.id = sa.staff_id
+        WHERE sa.institute_id = p_institute_id
+          AND s.is_active IS TRUE
+          AND (p_batch_id IS NULL OR sa.batch_id = p_batch_id)
+      ),
+      'assignments', (
+        SELECT COUNT(*)
+        FROM public.staff_assignments sa
+        JOIN public.staff s ON s.id = sa.staff_id
+        WHERE sa.institute_id = p_institute_id
+          AND s.is_active IS TRUE
+          AND (p_batch_id IS NULL OR sa.batch_id = p_batch_id)
+      )
     ),
     'parents', jsonb_build_object(
-      'total', (SELECT COUNT(*) FROM public.parents WHERE institute_id = p_institute_id)
+      'total', (
+        SELECT COUNT(DISTINCT sp.parent_id)
+        FROM public.student_parents sp
+        JOIN public.students st ON st.id = sp.student_id
+        WHERE st.institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
+      )
     ),
     'batches', jsonb_build_object(
-      'total', (SELECT COUNT(*) FROM public.batches WHERE institute_id = p_institute_id),
-      'active', (SELECT COUNT(*) FROM public.batches WHERE institute_id = p_institute_id AND is_active = TRUE)
+      'total', (
+        SELECT COUNT(*)
+        FROM public.batches
+        WHERE institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR id = p_batch_id)
+      ),
+      'active', (
+        SELECT COUNT(*)
+        FROM public.batches
+        WHERE institute_id = p_institute_id
+          AND is_active = TRUE
+          AND (p_batch_id IS NULL OR id = p_batch_id)
+      )
     ),
     'attendance', jsonb_build_object(
       'total_records', v_att_total,
@@ -117,14 +165,36 @@ BEGIN
       'overdue', v_overdue
     ),
     'schedules', jsonb_build_object(
-      'published', (SELECT COUNT(*) FROM public.schedules WHERE institute_id = p_institute_id AND status = 'published'),
-      'draft', (SELECT COUNT(*) FROM public.schedules WHERE institute_id = p_institute_id AND status = 'draft'),
-      'exam_slots', (SELECT COUNT(*) FROM public.schedules WHERE institute_id = p_institute_id AND type = 'exam')
+      'published', (
+        SELECT COUNT(*)
+        FROM public.schedules
+        WHERE institute_id = p_institute_id
+          AND status = 'published'
+          AND (p_batch_id IS NULL OR batch_id = p_batch_id)
+      ),
+      'draft', (
+        SELECT COUNT(*)
+        FROM public.schedules
+        WHERE institute_id = p_institute_id
+          AND status = 'draft'
+          AND (p_batch_id IS NULL OR batch_id = p_batch_id)
+      ),
+      'exam_slots', (
+        SELECT COUNT(*)
+        FROM public.schedules
+        WHERE institute_id = p_institute_id
+          AND type = 'exam'
+          AND (p_batch_id IS NULL OR batch_id = p_batch_id)
+      )
     ),
     'courses', jsonb_build_object(
       'enrollments_active', (
-        SELECT COUNT(*) FROM public.student_courses sc
-        WHERE sc.institute_id = p_institute_id AND sc.status = 'active'
+        SELECT COUNT(*)
+        FROM public.student_courses sc
+        JOIN public.students st ON st.id = sc.student_id
+        WHERE sc.institute_id = p_institute_id
+          AND sc.status = 'active'
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
       )
     )
   );
@@ -218,6 +288,7 @@ $$;
 -- Fee analytics
 CREATE OR REPLACE FUNCTION public.get_institute_fee_analytics(
   p_institute_id UUID,
+  p_batch_id UUID DEFAULT NULL,
   p_date_from DATE DEFAULT (CURRENT_DATE - INTERVAL '180 days')::DATE,
   p_date_to DATE DEFAULT CURRENT_DATE
 )
@@ -236,10 +307,12 @@ BEGIN
     'status_distribution', COALESCE((
       SELECT jsonb_object_agg(status, cnt)
       FROM (
-        SELECT status, COUNT(*)::INTEGER AS cnt
-        FROM public.student_fees
-        WHERE institute_id = p_institute_id
-        GROUP BY status
+        SELECT sf.status, COUNT(*)::INTEGER AS cnt
+        FROM public.student_fees sf
+        JOIN public.students st ON st.id = sf.student_id
+        WHERE sf.institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
+        GROUP BY sf.status
       ) s
     ), '{}'::JSONB),
     'monthly_revenue', COALESCE((
@@ -251,7 +324,10 @@ BEGIN
           'amount', SUM(fp.amount)
         ) AS row
         FROM public.fee_payments fp
+        JOIN public.student_fees sf ON sf.id = fp.student_fee_id
+        JOIN public.students st ON st.id = sf.student_id
         WHERE fp.institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
           AND fp.payment_date BETWEEN p_date_from AND p_date_to
         GROUP BY to_char(fp.payment_date, 'YYYY-MM'), to_char(fp.payment_date, 'Mon YYYY')
         ORDER BY to_char(fp.payment_date, 'YYYY-MM')
@@ -260,26 +336,37 @@ BEGIN
     ), '[]'::JSONB),
     'totals', jsonb_build_object(
       'collected', (
-        SELECT COALESCE(SUM(amount), 0) FROM public.fee_payments
-        WHERE institute_id = p_institute_id AND payment_date BETWEEN p_date_from AND p_date_to
+        SELECT COALESCE(SUM(fp.amount), 0)
+        FROM public.fee_payments fp
+        JOIN public.student_fees sf ON sf.id = fp.student_fee_id
+        JOIN public.students st ON st.id = sf.student_id
+        WHERE fp.institute_id = p_institute_id
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
+          AND fp.payment_date BETWEEN p_date_from AND p_date_to
       ),
       'pending', (
         SELECT COALESCE(SUM(GREATEST(sf.final_amount - COALESCE(paid.total, 0), 0)), 0)
         FROM public.student_fees sf
+        JOIN public.students st ON st.id = sf.student_id
         LEFT JOIN (
           SELECT student_fee_id, SUM(amount) AS total FROM public.fee_payments
           WHERE institute_id = p_institute_id GROUP BY student_fee_id
         ) paid ON paid.student_fee_id = sf.id
-        WHERE sf.institute_id = p_institute_id AND sf.status IN ('pending', 'partial')
+        WHERE sf.institute_id = p_institute_id
+          AND sf.status IN ('pending', 'partial')
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
       ),
       'overdue', (
         SELECT COALESCE(SUM(GREATEST(sf.final_amount - COALESCE(paid.total, 0), 0)), 0)
         FROM public.student_fees sf
+        JOIN public.students st ON st.id = sf.student_id
         LEFT JOIN (
           SELECT student_fee_id, SUM(amount) AS total FROM public.fee_payments
           WHERE institute_id = p_institute_id GROUP BY student_fee_id
         ) paid ON paid.student_fee_id = sf.id
-        WHERE sf.institute_id = p_institute_id AND sf.status = 'overdue'
+        WHERE sf.institute_id = p_institute_id
+          AND sf.status = 'overdue'
+          AND (p_batch_id IS NULL OR st.batch_id = p_batch_id)
       )
     )
   );
@@ -427,8 +514,8 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_institute_analytics_overview TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_institute_attendance_analytics TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_institute_fee_analytics TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_institute_schedule_analytics TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_student_analytics TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_institute_analytics_overview(UUID, UUID, DATE, DATE) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_institute_attendance_analytics(UUID, UUID, DATE, DATE) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_institute_fee_analytics(UUID, UUID, DATE, DATE) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_institute_schedule_analytics(UUID, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_student_analytics(UUID, DATE, DATE) TO authenticated;

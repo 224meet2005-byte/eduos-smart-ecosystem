@@ -1,3 +1,4 @@
+import { createFileRoute } from '@tanstack/react-router'
 // ---------------------------------------------------------------------------
 // EduOS — Admin: Student Management Page
 //
@@ -10,8 +11,7 @@
 //  - Error banner on fetch failure
 // ---------------------------------------------------------------------------
 
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Plus, AlertCircle, ChevronLeft, ChevronRight, X, RefreshCw, Loader2 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -22,6 +22,7 @@ import { useStudents } from "@/modules/students/hooks/useStudents";
 import { StudentTable } from "@/modules/students/components/StudentTable";
 import { StudentProfileSheet } from "@/modules/students/components/StudentProfileSheet";
 import { AdmissionForm } from "@/modules/students/components/AdmissionForm";
+import BulkImportModal from "@/modules/students/components/BulkImportModal";
 import { AssignFeeModal } from "@/modules/fees/components/AssignFeeModal";
 import { getFeeStructures } from "@/services/fee.service";
 import type { Student, StudentStatus, FeeStructure } from "@/types";
@@ -60,6 +61,7 @@ function StudentsPage() {
   const [isAssignFeeModalOpen, setIsAssignFeeModalOpen] = useState(false);
   /** Controls visibility of the Admit Student modal. */
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
+  const [admitMode, setAdmitMode] = useState<"manual" | "import">("manual");
   /** Tracks the raw SearchInput value (synced with hook's filters.search). */
   const [searchValue, setSearchValue] = useState("");
   /** Fee structures available for assignment in the current institute. */
@@ -290,22 +292,43 @@ function StudentsPage() {
             if (e.target === e.currentTarget) setIsAdmitModalOpen(false);
           }}
         >
-          <div className="relative bg-card rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={() => setIsAdmitModalOpen(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+          <div className="relative w-full max-w-4xl">
+            <div className="relative bg-card rounded-2xl shadow-xl w-full max-h-[90vh] overflow-y-auto p-6">
+              <button
+                type="button"
+                onClick={() => setIsAdmitModalOpen(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
 
-            <AdmissionForm
-              instituteId={instituteId ?? ""}
-              onSuccess={handleAdmissionSuccess}
-              onCancel={() => setIsAdmitModalOpen(false)}
-            />
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Admit Student</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setAdmitMode("manual")} className={`px-3 py-2 rounded-lg ${admitMode==='manual' ? 'bg-primary text-primary-foreground' : 'border border-border'}`}>Manual</button>
+                  <button onClick={() => setAdmitMode("import")} className={`px-3 py-2 rounded-lg ${admitMode==='import' ? 'bg-primary text-primary-foreground' : 'border border-border'}`}>Import</button>
+                </div>
+              </div>
+
+              {admitMode === "manual" ? (
+                <AdmissionForm
+                  instituteId={instituteId ?? ""}
+                  onSuccess={() => { handleAdmissionSuccess(); /* keep modal open for credentials */ }}
+                  onCancel={() => setIsAdmitModalOpen(false)}
+                />
+              ) : (
+                // Lazy import BulkImportModal component
+                <React.Suspense fallback={<div className="p-6">Loading…</div>}>
+                  <BulkImportModal
+                    instituteId={instituteId ?? ""}
+                    instituteName={user?.institute_id ?? undefined}
+                    onClose={() => setIsAdmitModalOpen(false)}
+                    onComplete={() => fetchStudents(1)}
+                  />
+                </React.Suspense>
+              )}
+            </div>
           </div>
         </div>
       )}

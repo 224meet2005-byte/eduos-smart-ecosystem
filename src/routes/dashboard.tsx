@@ -28,6 +28,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardSidebar } from "@/components/dashboard/Sidebar";
 import { Topbar } from "@/components/dashboard/Topbar";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -38,18 +39,33 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardLayoutPage() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  function handleToggleSidebar() {
+    if (isMobile) {
+      setMobileSidebarOpen((open) => !open);
+      return;
+    }
+
+    setCollapsed((open) => !open);
+  }
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-svh w-full overflow-x-hidden bg-background">
       {/* Persistent sidebar — role-aware navigation */}
-      <DashboardSidebar collapsed={collapsed} />
+      <DashboardSidebar
+        collapsed={collapsed}
+        mobileOpen={mobileSidebarOpen}
+        onMobileOpenChange={setMobileSidebarOpen}
+      />
 
       {/* Right column: topbar + page content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onToggleSidebar={() => setCollapsed((c) => !c)} />
+        <Topbar onToggleSidebar={handleToggleSidebar} />
 
         {/* All child routes render here */}
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
+        <main className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>

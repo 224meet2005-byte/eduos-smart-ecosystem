@@ -117,19 +117,13 @@ function DataTableInner<T>({
 
     // Defensive: if caller didn't provide a keyExtractor, fall back to common fields
     // (id or key) and finally the row index. Also log once to aid debugging.
-    const usingFallback = typeof keyExtractor !== "function";
-    if (usingFallback) {
-      // temporary structured debug log — remove after verification
-      // eslint-disable-next-line no-console
-      console.debug("[DataTable] keyExtractor not provided or invalid; using fallback key generation.");
-    }
-
     return data.map((row, rowIndex) => {
+      const fallbackRow = row as { id?: string | number; key?: string | number };
       const key =
         typeof keyExtractor === "function"
           ? keyExtractor(row)
           : // fallback: prefer `id`, then `key`, then index
-            ((row as any)?.id ?? (row as any)?.key ?? String(rowIndex));
+            (fallbackRow.id ?? fallbackRow.key ?? String(rowIndex));
 
       return (
         <tr
@@ -141,7 +135,13 @@ function DataTableInner<T>({
           )}
         >
           {columns.map((col) => (
-            <td key={col.key} className={cn("px-4 py-3 align-middle", col.cellClassName)}>
+            <td
+              key={col.key}
+              className={cn(
+                "px-3 py-2 align-middle text-xs sm:px-4 sm:py-3 sm:text-sm",
+                col.cellClassName,
+              )}
+            >
               {col.render(row, rowIndex)}
             </td>
           ))}
@@ -152,8 +152,8 @@ function DataTableInner<T>({
 
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="min-w-[640px] w-full text-xs sm:min-w-full sm:text-sm">
           {/* ── Header ─────────────────────────────────────────────────────── */}
           <thead>
             <tr className="border-b border-border bg-muted/40">
@@ -162,7 +162,7 @@ function DataTableInner<T>({
                   key={col.key}
                   scope="col"
                   className={cn(
-                    "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider",
+                    "px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider sm:px-4 sm:py-3 sm:text-xs",
                     "text-muted-foreground whitespace-nowrap",
                     col.headerClassName,
                   )}
@@ -184,4 +184,4 @@ function DataTableInner<T>({
   );
 }
 
-    export const DataTable = React.memo(DataTableInner) as typeof DataTableInner;
+export const DataTable = React.memo(DataTableInner) as typeof DataTableInner;

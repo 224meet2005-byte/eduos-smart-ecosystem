@@ -70,7 +70,7 @@ export function RecentTable({ students, isLoading = false }: RecentTableProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
           <h3 className="text-sm font-semibold">Recent admissions</h3>
           <p className="text-xs text-muted-foreground">
@@ -86,8 +86,8 @@ export function RecentTable({ students, isLoading = false }: RecentTableProps) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="min-w-[640px] w-full text-xs sm:min-w-full sm:text-sm">
           <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Student</th>

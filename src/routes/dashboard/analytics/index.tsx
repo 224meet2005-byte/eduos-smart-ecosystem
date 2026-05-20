@@ -87,7 +87,7 @@ function AnalyticsPage() {
   const loadBatches = useCallback(async () => {
     if (!instituteId) return;
     const res = await getBatchesByInstitute(instituteId);
-    if (res.success && res.data) setBatches(res.data);
+    if (res.success && res.data) setBatches(res.data.items ?? []);
   }, [instituteId]);
 
   const loadAnalytics = useCallback(async () => {

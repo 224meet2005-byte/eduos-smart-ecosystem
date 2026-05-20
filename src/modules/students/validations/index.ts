@@ -23,82 +23,41 @@ const phoneField = z
 /**
  * Zod schema for the "Admit Student" form.
  *
- * Sections:
- *  1. Personal info   — full name, phone (required); contact email optional
- *  2. Academic        — admission number (required), batch (optional text)
- *  3. Emergency contact — name, phone, relationship (all optional)
- *  4. Parent details  — name, email, phone, occupation, relationship (optional)
- *
- * Design notes:
- *  - `aadhaarLast4` uses `z.preprocess` to coerce an empty string to
- *    `undefined` before the regex runs, so an empty field passes validation.
- *  - All optional string fields use `.optional()` rather than `.nullable()`
- *    because HTML inputs produce `""` or `undefined`, never `null`.
- *  - Parent section is optional — if parent_name is provided, parent_email
- *    and parent_relation_type are required. Otherwise all parent fields ignored.
+ * Only the core admission fields are required. Everything else stays optional
+ * so missing batch, emergency contact, or parent data never blocks admission.
  */
 export const admissionSchema = z.object({
-  // ── Section 1 — Personal Info ─────────────────────────────────────────────
   fullName: z
     .string()
     .min(2, "Full name must be at least 2 characters")
     .max(100, "Full name must be 100 characters or fewer"),
 
-  /** Optional real contact email; login credentials are auto-generated on admission. */
   contactEmail: z
     .string()
-    .email("Please enter a valid email address")
-    .optional()
-    .or(z.literal("")),
+    .min(1, "Contact email is required")
+    .email("Please enter a valid email address"),
 
   phone: phoneField,
 
-  // ── Section 2 — Academic ──────────────────────────────────────────────────
   admissionNo: z
     .string()
     .min(1, "Admission number is required")
     .max(50, "Admission number must be 50 characters or fewer"),
 
-  /**
-   * Batch identifier — free-text for now until the batch-selector widget
-   * is wired to live backend data.
-   */
   batchId: z.string().max(100).optional(),
 
-  // (Identity section removed: Aadhaar is not collected)
-
-  // ── Section 4 — Emergency Contact ────────────────────────────────────────
   emergencyContactName: z.string().max(100).optional(),
   emergencyContactPhone: z.string().max(20).optional(),
   emergencyRelationship: z.string().max(50).optional(),
 
-  // ── Section 5 — Parent Details ───────────────────────────────────────────
-  /**
-   * If parent_name is provided, parent_email and parent_relation_type are required.
-   * If parent_name is empty, all parent fields are ignored.
-   * This allows admins to optionally create a parent during student admission.
-   */
   parentName: z.string().max(100).optional(),
-  parentEmail: z.string().email().optional(),
+  parentEmail: z.string().email().optional().or(z.literal("")),
   parentPhone: phoneField.optional(),
   parentOccupation: z.string().max(100).optional(),
   parentRelationType: z
     .enum(["father", "mother", "guardian", "sibling", "other"])
     .optional(),
-}).refine(
-  (data) => {
-    // If parent_name is provided, require email and relation type
-    if (data.parentName) {
-      return !!data.parentEmail && !!data.parentRelationType;
-    }
-    // If parent_name is not provided, parent section is optional
-    return true;
-  },
-  {
-    message: "If providing parent details, parent email and relationship type are required",
-    path: ["parentName"],
-  },
-);
+});
 
 /** TypeScript type inferred from `admissionSchema`. Use with `useForm<AdmissionSchema>`. */
 export type AdmissionSchema = z.infer<typeof admissionSchema>;

@@ -528,6 +528,32 @@ export interface StudentAdmissionCredentials {
   temporary_password: string;
 }
 
+// ── Bulk import types ───────────────────────────────────────────────────────
+/** Row parsed from the XML import file (one student). */
+export interface BulkImportRow {
+  rowNumber: number;
+  full_name: string;
+  contact_email?: string | null;
+  phone?: string | null;
+  admission_number: string;
+  batch?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_relationship?: string | null;
+  parent_name?: string | null;
+  parent_email?: string | null;
+  parent_phone?: string | null;
+  occupation?: string | null;
+  relationship_type?: RelationType | null;
+}
+
+export interface BulkImportErrorRow {
+  rowNumber: number;
+  studentName?: string | null;
+  admissionNumber?: string | null;
+  errorMessage: string;
+}
+
 export type ParentAccountStatus = "not_provided" | "existing_linked" | "created";
 export type ParentEmailDeliveryStatus = "not_applicable" | "sent" | "failed";
 

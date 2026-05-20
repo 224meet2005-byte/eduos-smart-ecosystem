@@ -430,7 +430,7 @@ function AttendancePage() {
     const controller = new AbortController();
 
     Promise.all([
-      getBatchStudents(linkedBatchId, instituteId),
+      getBatchStudents(instituteId, linkedBatchId),
       getSessionWithRecords(expandedSessionId),
     ])
       .then(([studentsResult, sessionResult]) => {

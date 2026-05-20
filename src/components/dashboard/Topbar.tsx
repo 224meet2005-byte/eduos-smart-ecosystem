@@ -39,18 +39,19 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/70 backdrop-blur-xl">
-      <div className="flex h-16 items-center gap-3 px-4 md:px-6">
+      <div className="flex min-h-14 items-center gap-3 px-3 py-2 sm:h-16 sm:px-4 md:px-6">
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleSidebar}
-          className="hidden md:inline-flex"
+          className="inline-flex shrink-0"
+          aria-label="Toggle navigation"
         >
           <PanelLeft className="h-4 w-4" />
         </Button>
 
         {/* Search bar */}
-        <div className="relative hidden flex-1 max-w-md md:block">
+        <div className="relative hidden flex-1 max-w-md lg:block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             placeholder="Search students, courses, invoices…"
@@ -80,7 +81,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <div className="relative ml-1" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((o) => !o)}
-              className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-accent/10 transition-colors"
+              className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-accent/10"
               aria-label="User menu"
               aria-expanded={menuOpen}
             >
@@ -89,12 +90,12 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 {initials}
               </div>
               {/* Name + role — hidden on small screens */}
-              <div className="hidden flex-col items-start leading-tight md:flex">
+              <div className="hidden flex-col items-start leading-tight sm:flex">
                 <span className="text-xs font-medium text-foreground">{displayName}</span>
                 <span className="text-[10px] text-muted-foreground">{roleLabel}</span>
               </div>
               <ChevronDown
-                className={`hidden h-3.5 w-3.5 text-muted-foreground transition-transform md:block ${
+                className={`hidden h-3.5 w-3.5 text-muted-foreground transition-transform sm:block ${
                   menuOpen ? "rotate-180" : ""
                 }`}
               />

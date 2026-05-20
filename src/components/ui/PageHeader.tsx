@@ -55,8 +55,8 @@ export function PageHeader({ title, subtitle, badge, actions, className }: PageH
   return (
     <header
       className={cn(
-        "flex flex-col gap-4 border-b border-border pb-5",
-        "sm:flex-row sm:items-start sm:justify-between",
+        "flex flex-col gap-3 border-b border-border pb-4 sm:gap-4 sm:pb-5",
+        "md:flex-row md:items-start md:justify-between",
         className,
       )}
     >
@@ -90,9 +90,8 @@ export function PageHeader({ title, subtitle, badge, actions, className }: PageH
       {actions && (
         <div
           className={cn(
-            "flex shrink-0 flex-wrap items-center gap-2",
-            // On small screens actions sit below the title; on sm+ they align right
-            "sm:self-start",
+            "flex w-full shrink-0 flex-wrap items-stretch gap-2 sm:w-auto sm:items-center",
+            "md:self-start",
           )}
         >
           {actions}

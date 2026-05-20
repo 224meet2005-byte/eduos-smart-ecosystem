@@ -54,6 +54,7 @@ export async function getInstituteAnalyticsOverview(
       async () => {
         const { data: row, error } = await supabase.rpc("get_institute_analytics_overview", {
           p_institute_id: filters.instituteId,
+          p_batch_id: filters.batchId ?? null,
           p_date_from: dateFrom,
           p_date_to: dateTo,
         });
@@ -107,6 +108,7 @@ export async function getInstituteFeeAnalytics(
       async () => {
         const { data: row, error } = await supabase.rpc("get_institute_fee_analytics", {
           p_institute_id: filters.instituteId,
+          p_batch_id: filters.batchId ?? null,
           p_date_from: dateFrom,
           p_date_to: dateTo,
         });
@@ -124,18 +126,14 @@ export async function getInstituteScheduleAnalytics(
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   return runService("getInstituteScheduleAnalytics", async () => {
-    const data = await cachedQuery(
-      cacheKey("analytics:schedule", filters),
-      90_000,
-      async () => {
-        const { data: row, error } = await supabase.rpc("get_institute_schedule_analytics", {
-          p_institute_id: filters.instituteId,
-          p_batch_id: filters.batchId ?? null,
-        });
-        if (error) throw new Error(getErrorMessage(error));
-        return row as InstituteScheduleAnalytics;
-      },
-    );
+    const data = await cachedQuery(cacheKey("analytics:schedule", filters), 90_000, async () => {
+      const { data: row, error } = await supabase.rpc("get_institute_schedule_analytics", {
+        p_institute_id: filters.instituteId,
+        p_batch_id: filters.batchId ?? null,
+      });
+      if (error) throw new Error(getErrorMessage(error));
+      return row as InstituteScheduleAnalytics;
+    });
     return { data, error: null, success: true };
   });
 }
@@ -152,8 +150,7 @@ export async function getInstituteAnalyticsBundle(
       getInstituteScheduleAnalytics(filters),
     ]);
 
-    const firstError =
-      overview.error ?? attendance.error ?? fees.error ?? schedule.error ?? null;
+    const firstError = overview.error ?? attendance.error ?? fees.error ?? schedule.error ?? null;
 
     if (firstError) {
       return { data: null, error: firstError, success: false };

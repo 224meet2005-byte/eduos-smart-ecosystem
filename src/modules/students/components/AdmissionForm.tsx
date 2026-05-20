@@ -12,15 +12,17 @@
 //  4. Emergency Contact — name, phone, relationship (all optional)
 // ---------------------------------------------------------------------------
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, CheckCircle2, User, BookOpen, Shield, Phone, Users } from "lucide-react";
 
 import { admissionSchema, type AdmissionSchema } from "@/modules/students/validations";
 import { admitStudent } from "@/services";
+import { getBatchesByInstitute } from "@/services";
 import { useAuthStore } from "@/store/authStore";
 import type {
+  Batch,
   AdmitStudentPayload,
   AdmitStudentResult,
   ParentAdmissionPayload,
@@ -76,6 +78,27 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
   const [serverError, setServerError] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<AdmitStudentResult | null>(null);
   const [admittedStudentName, setAdmittedStudentName] = useState("");
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBatches() {
+      setIsLoadingBatches(true);
+      const result = await getBatchesByInstitute(instituteId, { page: 1, pageSize: 500 });
+      if (!cancelled) {
+        setBatches(result.success && result.data ? result.data.items : []);
+        setIsLoadingBatches(false);
+      }
+    }
+
+    void loadBatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [instituteId]);
 
   const {
     register,
@@ -115,10 +138,10 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
     const studentPayload: StudentAdmissionPayload = {
       institute_id: instituteId,
       student_name: values.fullName,
-      student_email: values.contactEmail?.trim() || null,
+      student_email: values.contactEmail.trim() || null,
       phone: values.phone,
       admission_number: values.admissionNo,
-      batch_id: null,
+      batch_id: values.batchId?.trim() || null,
       aadhaar_last4: null,
       emergency_contact: hasEmergencyContact
         ? {
@@ -249,11 +272,13 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
             )}
           </div>
 
-          {/* Contact email (optional) */}
+          {/* Contact email */}
           <div>
             <label htmlFor="contactEmail" className={LABEL_CLASS}>
               Contact email{" "}
-              <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
             </label>
             <input
               id="contactEmail"
@@ -332,14 +357,21 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
 
           {/* Batch — disabled until Batch management is built */}
           <div>
-            <label className={LABEL_CLASS}>
+            <label htmlFor="batchId" className={LABEL_CLASS}>
               Batch <span className="text-xs font-normal text-muted-foreground">(optional)</span>
             </label>
-            <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5">
-              <span className="text-sm text-muted-foreground">Batch assignment coming soon</span>
-            </div>
+            <select id="batchId" {...register("batchId")} className={INPUT_CLASS} disabled={isLoadingBatches}>
+              <option value="">Unassigned</option>
+              {batches.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.name}
+                </option>
+              ))}
+            </select>
             <p className="mt-1 text-xs text-muted-foreground">
-              Batches can be assigned after admission once the Batch module is set up.
+              {isLoadingBatches
+                ? "Loading available batches..."
+                : "Leave as Unassigned to admit the student without a batch."}
             </p>
           </div>
         </div>
@@ -353,7 +385,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       <div>
         <SectionHeader icon={<Phone />} title="Emergency Contact" />
         <p className="mb-4 text-xs text-muted-foreground -mt-1">
-          All fields are optional — fill in what's available at admission time.
+          All fields are optional — fill in what is available at admission time.
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           {/* Contact Name */}
@@ -408,8 +440,7 @@ export function AdmissionForm({ instituteId, onSuccess, onCancel }: AdmissionFor
       <div>
         <SectionHeader icon={<Users />} title="Parent / Guardian Details" />
         <p className="mb-4 text-xs text-muted-foreground -mt-1">
-          Optional — provide parent details to auto-create a parent account. If a parent with this
-          email already exists, they will be linked instead.
+          Optional — provide parent details to auto-create or link a parent account.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Parent Name */}

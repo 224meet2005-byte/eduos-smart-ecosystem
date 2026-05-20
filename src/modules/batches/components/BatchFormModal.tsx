@@ -7,8 +7,8 @@ import {
   batchSchema as batchFormSchema,
   type BatchSchema as BatchFormSchema,
 } from "@/modules/batches/validations";
-import type { Batch, CreateBatchPayload, LmsCourse } from "@/types";
-import { listCourses } from "@/modules/courses/services/course.service";
+import type { Batch, Course, CreateBatchPayload } from "@/types";
+import { getCoursesByInstitute } from "@/services/course.service";
 
 interface BatchFormModalProps {
   isOpen: boolean;
@@ -50,7 +50,7 @@ function defaultValues(batch?: Batch | null): BatchFormSchema {
     end_date: batch?.end_date ?? start,
     capacity: batch?.capacity ?? 60,
     academic_year: batch?.academic_year ?? deriveAcademicYear(start),
-    status: (batch?.status as any) ?? "active",
+    status: batch?.status ?? "active",
   };
 }
 
@@ -63,17 +63,17 @@ export function BatchFormModal({
   onSubmitBatch,
 }: BatchFormModalProps) {
   const [serverError, setServerError] = useState<string | null>(null);
-  const [courses, setCourses] = useState<LmsCourse[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !instituteId) return;
 
     setLoadingCourses(true);
-    listCourses(instituteId, { pageSize: 100, status: "published" })
+    getCoursesByInstitute(instituteId)
       .then((res) => {
         if (res.success && res.data) {
-          setCourses(res.data.items);
+          setCourses(res.data);
         }
       })
       .finally(() => setLoadingCourses(false));
@@ -101,7 +101,7 @@ export function BatchFormModal({
     if (selectedCourseId) {
       const course = courses.find((c) => c.id === selectedCourseId);
       if (course) {
-        setValue("course_name", course.title, { shouldDirty: true });
+        setValue("course_name", course.name, { shouldDirty: true });
       }
     }
   }, [selectedCourseId, courses, setValue]);
@@ -117,13 +117,13 @@ export function BatchFormModal({
     }
   }, [mode, setValue, startDate]);
 
-  async function onSubmit(values: BatchSchema) {
+  async function onSubmit(values: BatchFormSchema) {
     setServerError(null);
 
     const payload = {
       name: values.name.trim(),
       batch_code: (values.batch_code ?? "").trim().toUpperCase() || undefined,
-      course_id: values.course_id,
+      course_id: values.course_id || null,
       course_name: (values.course_name ?? "").trim() || undefined,
       start_date: values.start_date,
       end_date: values.end_date,
@@ -241,7 +241,7 @@ export function BatchFormModal({
                 <option value="">No course link</option>
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.title}
+                    {c.name} ({c.code})
                   </option>
                 ))}
               </select>
@@ -262,8 +262,8 @@ export function BatchFormModal({
           </div>
 
           <div>
-            <label htmlFor="course_name" className={LABEL_CLASS}>
-              Display Course Name
+            <label htmlFor="start_date" className={LABEL_CLASS}>
+              Start Date
             </label>
             <input
               id="start_date"

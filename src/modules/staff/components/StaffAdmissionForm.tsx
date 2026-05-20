@@ -74,7 +74,7 @@ export function StaffAdmissionForm({ instituteId, onSuccess, onCancel }: StaffAd
         getBatchesByInstitute(instituteId),
         getCoursesByInstitute(instituteId),
       ]);
-      if (batchRes.success) setBatches(batchRes.data ?? []);
+      if (batchRes.success) setBatches(batchRes.data?.items ?? []);
       if (courseRes.success) setCourses(courseRes.data ?? []);
       setIsLoadingMetadata(false);
     }

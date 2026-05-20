@@ -152,7 +152,7 @@ export function StudentIDCard({
               </div>
               <div>
                 <p className="text-base font-bold text-gray-900 uppercase tracking-wide">
-                  {student.user?.name ?? "—"}
+                  {student.user?.name ?? "Not Added"}
                 </p>
                 <p className="font-mono text-xs text-gray-500 mt-0.5">
                   Admission No: {student.admission_no}
@@ -179,6 +179,13 @@ export function StudentIDCard({
               <p className="mt-2 text-xs text-gray-600">
                 <span className="font-medium text-gray-700">Phone: </span>
                 {student.user.phone}
+              </p>
+            )}
+
+            {!student.user?.phone && (
+              <p className="mt-2 text-xs text-gray-600">
+                <span className="font-medium text-gray-700">Phone: </span>
+                Not Added
               </p>
             )}
 
@@ -216,6 +223,9 @@ export function StudentIDCard({
                       <span className="font-medium">Phone: </span>
                       {ec.phone}
                     </p>
+                  )}
+                  {!ec.name && !ec.relation && !ec.phone && (
+                    <p className="text-xs text-gray-600">Not Added</p>
                   )}
                 </div>
               ) : (

@@ -710,12 +710,9 @@ export async function admitStudent(
   let parentResolvedEmail: string | null = null;
   let parentGeneratedPassword: string | null = null;
   let parentUserId: string | null = null;
-  const hasParentBlock =
-    !!payload.parent_name?.trim() &&
-    !!payload.parent_email?.trim() &&
-    payload.parent_relation_type != null;
+  const hasParentEmail = !!payload.parent_email?.trim();
 
-  if (hasParentBlock) {
+  if (hasParentEmail) {
     parentResolvedEmail = payload.parent_email!.trim().toLowerCase();
 
     // Check if email is already mapped to a compatible parent account.
@@ -745,7 +742,9 @@ export async function admitStudent(
       parentUserId = existingUser.id;
       parentAccountStatus = "existing_linked";
     } else {
-      const parentCredentials = generateParentCredentials(payload.parent_name!);
+      const parentCredentials = generateParentCredentials(
+        payload.parent_name?.trim() || payload.student_name,
+      );
       parentGeneratedPassword = parentCredentials.temporaryPassword;
 
       // Create new parent auth account with a forced password-change flag.
@@ -754,7 +753,7 @@ export async function admitStudent(
         password: parentGeneratedPassword,
         email_confirm: true,
         user_metadata: {
-          name: payload.parent_name,
+          name: payload.parent_name?.trim() || payload.student_name,
           role: "parent",
           institute_id: payload.institute_id,
           force_password_change: true,
@@ -787,11 +786,11 @@ export async function admitStudent(
     p_batch_id: payload.batch_id,
     p_aadhaar_last4: payload.aadhaar_last4,
     p_emergency_contact: payload.emergency_contact,
-    p_parent_name: hasParentBlock ? payload.parent_name : null,
-    p_parent_email: hasParentBlock ? payload.parent_email : null,
-    p_parent_phone: hasParentBlock ? payload.parent_phone?.trim() || null : null,
-    p_parent_occupation: hasParentBlock ? payload.parent_occupation?.trim() || null : null,
-    p_parent_relation_type: hasParentBlock ? payload.parent_relation_type : null,
+    p_parent_name: hasParentEmail ? payload.parent_name : null,
+    p_parent_email: hasParentEmail ? payload.parent_email : null,
+    p_parent_phone: hasParentEmail ? payload.parent_phone?.trim() || null : null,
+    p_parent_occupation: hasParentEmail ? payload.parent_occupation?.trim() || null : null,
+    p_parent_relation_type: hasParentEmail ? payload.parent_relation_type : null,
     p_parent_user_id: parentUserId,
   });
 
@@ -851,6 +850,46 @@ export async function admitStudent(
     console.error("[admitStudent] exception:", err);
     return { data: null, error: msg, success: false };
   }
+}
+
+/**
+ * Bulk admit multiple students.
+ * Processes payloads in concurrent batches to avoid long synchronous loops.
+ */
+export async function bulkAdmitStudents(
+  payloads: AdmitStudentPayload[],
+  concurrency = 8,
+): Promise<ApiResponse<{
+  successes: AdmitStudentResult[];
+  errors: { index: number; admission_number?: string; error: string }[];
+}>> {
+  if (!supabase || !supabaseAdmin) return SUPABASE_NOT_CONFIGURED;
+
+  const successes: AdmitStudentResult[] = [];
+  const errors: { index: number; admission_number?: string; error: string }[] = [];
+
+  // Helper to process a single payload by delegating to admitStudent
+  async function processOne(index: number, payload: AdmitStudentPayload) {
+    try {
+      const res = await admitStudent(payload);
+      if (res.success && res.data) {
+        successes.push(res.data);
+      } else {
+        errors.push({ index, admission_number: payload.admission_number, error: res.error ?? "Unknown error" });
+      }
+    } catch (err: any) {
+      const msg = (err && err.message) || String(err);
+      errors.push({ index, admission_number: payload.admission_number, error: msg });
+    }
+  }
+
+  // Batch processing with concurrency limit
+  for (let i = 0; i < payloads.length; i += concurrency) {
+    const chunk = payloads.slice(i, i + concurrency);
+    await Promise.all(chunk.map((p, idx) => processOne(i + idx, p)));
+  }
+
+  return { data: { successes, errors }, error: null, success: true };
 }
 
 /**

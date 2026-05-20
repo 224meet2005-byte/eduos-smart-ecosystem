@@ -236,7 +236,7 @@ export function StudentProfileSheet({
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4 shrink-0">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-foreground truncate">
-              {student.user?.name ?? "—"}
+              {student.user?.name ?? "Not Added"}
             </h2>
             <p className="font-mono text-xs text-muted-foreground">{student.admission_no}</p>
             <div className="mt-1.5">
@@ -268,9 +268,13 @@ export function StudentProfileSheet({
           {/* Info grid */}
           <SectionLabel>Contact & Academic</SectionLabel>
           <div className="grid grid-cols-1 gap-4 px-5 py-4 sm:grid-cols-2">
-            <InfoRow icon={<Mail />} label="Email" value={student.user?.email ?? "—"} />
-            <InfoRow icon={<Phone />} label="Phone" value={student.user?.phone ?? "—"} />
-            <InfoRow icon={<BookOpen />} label="Batch" value={student.batch_id ?? "—"} />
+            <InfoRow icon={<Mail />} label="Email" value={student.user?.email ?? "Not Added"} />
+            <InfoRow icon={<Phone />} label="Phone" value={student.user?.phone ?? "Not Added"} />
+            <InfoRow
+              icon={<BookOpen />}
+              label="Batch"
+              value={student.batch?.name ?? (student.batch_id ? "Assigned" : "Unassigned")}
+            />
             <InfoRow icon={<Calendar />} label="Joined" value={formatDate(student.created_at)} />
           </div>
 
@@ -285,7 +289,7 @@ export function StudentProfileSheet({
                 </div>
               </div>
               <p className="text-sm font-mono text-foreground break-all bg-background border border-border rounded px-2 py-1">
-                {student.generated_email || student.user?.email || "—"}
+                {student.generated_email || student.user?.email || "Not Added"}
               </p>
             </div>
 
@@ -385,10 +389,10 @@ export function StudentProfileSheet({
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {link.parent?.user?.name ?? "—"}
+                        {link.parent?.user?.name ?? "Not Added"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {link.parent?.user?.email ?? "—"}
+                        {link.parent?.user?.email ?? "Not Added"}
                       </p>
                     </div>
                     <span className="ml-2 shrink-0 text-xs capitalize text-muted-foreground">

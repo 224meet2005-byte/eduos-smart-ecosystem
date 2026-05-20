@@ -11,7 +11,10 @@ export const batchSchema = z
       .min(4, "Academic year required")
       .max(20)
       .regex(/^\d{4}(-\d{2,4})?$/, "Format: 2024 or 2024-25"),
-    course_id: z.string().uuid("Invalid course").optional().nullable(),
+    course_id: z.preprocess(
+      (value) => (value === "" ? null : value),
+      z.string().uuid("Invalid course").optional().nullable(),
+    ),
     description: z.string().max(300).optional(),
     batch_code: z.string().max(50, "Batch code must be 50 characters or fewer").optional(),
     course_name: z.string().max(100, "Course name must be 100 characters or fewer").optional(),

@@ -134,9 +134,9 @@ export function StudentCredentialsCard({ studentName, credentials }: StudentCred
             </div>
             
             <div className="grid gap-2">
-              <CredentialRow label="Parent Email" value={credentials.parent_email ?? "—"} />
+              <CredentialRow label="Parent Email" value={credentials.parent_email ?? "Not Added"} />
               {credentials.parent_account_status === "created" ? (
-                <CredentialRow label="Parent Password" value={credentials.parent_temporary_password ?? "—"} isPassword={true} />
+                <CredentialRow label="Parent Password" value={credentials.parent_temporary_password ?? "Not Added"} isPassword={true} />
               ) : (
                 <div className="flex items-center gap-2 text-[11px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5 rounded-lg border border-amber-200/50">
                   <CheckCircle2 className="h-3.5 w-3.5" />
