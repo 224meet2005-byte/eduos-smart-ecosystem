@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, Search, Filter, MoreVertical, Edit2, UserPlus, FileText, CheckCircle2, Clock, AlertCircle, Calendar, Award, Trash2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, Search, Filter, MoreVertical, Edit2, UserPlus, FileText, CheckCircle2, Clock, AlertCircle, Calendar, Award, Trash2, Upload } from "lucide-react";
 import { format } from "date-fns";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -30,6 +30,7 @@ import {
   useAssignToStudents 
 } from "@/modules/assignments/hooks/useAssignments";
 import { AssignmentFormModal } from "@/modules/assignments/components/admin/AssignmentFormModal";
+import CanvasModal from "@/modules/assignments/components/admin/CanvasModal";
 import { AssigneeSelector } from "@/modules/assignments/components/admin/AssigneeSelector";
 import { SubmissionList } from "@/modules/assignments/components/admin/SubmissionList";
 import type { Assignment, AssignmentSchema, AssignmentResourceSchema } from "@/types";
@@ -118,6 +119,28 @@ function AdminAssignmentsPage() {
     setIsModalOpen(true);
   };
 
+  const [isCanvasOpen, setIsCanvasOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadCanvas = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('title', file.name);
+      const res = await fetch('/api/assignments/upload-pdf', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Upload failed');
+      toast.success('Canvas uploaded successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to upload canvas');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const openEditModal = (assignment: Assignment) => {
     setSelectedAssignment(assignment);
     setIsModalOpen(true);
@@ -139,7 +162,7 @@ function AdminAssignmentsPage() {
 
   if (viewingSubmissionsId) {
     return (
-      <ProtectedRoute allowedRoles={["admin"]}>
+      <ProtectedRoute allowedRoles={["admin", "staff"]}>
         <SubmissionList 
           assignmentId={viewingSubmissionsId} 
           onBack={() => setViewingSubmissionsId(null)} 
@@ -149,16 +172,27 @@ function AdminAssignmentsPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={["admin"]}>
+    <ProtectedRoute allowedRoles={["admin", "staff"]}>
       <div className="space-y-6">
         <PageHeader
           title="Assignments"
           subtitle="Manage standalone assignments and student submissions"
           actions={
-            <Button onClick={openCreateModal}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Assignment
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={openCreateModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Assignment
+              </Button>
+              <Button variant="outline" onClick={() => setIsCanvasOpen(true)}>
+                <FileText className="mr-2 h-4 w-4" />
+                Create Canvas
+              </Button>
+              <Button variant="ghost" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Canvas
+              </Button>
+              <input type="file" ref={fileInputRef} className="hidden" accept="application/pdf,image/*" onChange={handleUploadCanvas} />
+            </div>
           }
         />
 
@@ -223,6 +257,8 @@ function AdminAssignmentsPage() {
           initialData={selectedAssignment}
           mode={selectedAssignment ? "edit" : "create"}
         />
+
+        <CanvasModal isOpen={isCanvasOpen} onClose={() => setIsCanvasOpen(false)} />
 
         {selectedAssignment && (
           <AssigneeSelector

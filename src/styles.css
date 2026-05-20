@@ -200,3 +200,28 @@
     box-shadow: var(--shadow-card);
   }
 }
+
+/* Notebook page ruled lines and margin */
+.notebook-page { background: #fff; position: relative; overflow: hidden; }
+.notebook-page .page-lines::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(#e6f0ff 0px, #e6f0ff 1px, transparent 1px, transparent 28px);
+  opacity: 0.75;
+}
+.notebook-page .page-lines::after {
+  content: '';
+  position: absolute;
+  left: 48px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ff6b6b;
+  opacity: 0.9;
+}
+
+.dark .notebook-page { background: #0b1220; color: #e5e7eb }
+
+.btn { padding: 6px 10px; background: var(--card); border-radius: 6px; border: 1px solid var(--color-border); }
+

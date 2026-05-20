@@ -8,32 +8,49 @@ export function useExcelParser() {
 
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const XLSX = await import("xlsx");
-      const workbook = XLSX.read(arrayBuffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+      const { Workbook } = await import("exceljs");
+      const workbook = new Workbook();
+      await workbook.xlsx.load(arrayBuffer);
 
-      const rows: BulkImportRow[] = json.map((r, i) => ({
-        rowNumber: i + 1,
-        full_name: (r["full_name"] ?? r["full name"] ?? "").toString().trim(),
-        contact_email: (r["contact_email"] ?? r["contact email"] ?? "") || null,
-        phone: (r["phone"] ?? "") || null,
-        admission_number: (r["admission_number"] ?? r["admission number"] ?? "").toString().trim(),
-        batch: (r["batch"] ?? "") || null,
-        emergency_contact_name: (r["emergency_contact_name"] ?? r["emergency contact name"] ?? "") || null,
-        emergency_contact_phone: (r["emergency_contact_phone"] ?? r["emergency contact phone"] ?? "") || null,
-        emergency_relationship: (r["emergency_relationship"] ?? r["emergency relationship"] ?? "") || null,
-        parent_name: (r["parent_name"] ?? r["parent name"] ?? "") || null,
-        parent_email: (r["parent_email"] ?? r["parent email"] ?? "") || null,
-        parent_phone: (r["parent_phone"] ?? r["parent phone"] ?? "") || null,
-        occupation: (r["occupation"] ?? "") || null,
-        relationship_type: (r["relationship_type"] ?? r["relationship type"] ?? null) as any,
-      }));
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) return { rows: [], error: "Excel file does not contain a worksheet." };
+
+      const headerRow = worksheet.getRow(1);
+      const headers = headerRow.values
+        .slice(1)
+        .map((value) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, "_"));
+
+      const rows: BulkImportRow[] = [];
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+
+        const record: Record<string, any> = {};
+        row.eachCell((cell, colNumber) => {
+          const key = headers[colNumber - 1];
+          if (key) record[key] = cell.value ?? "";
+        });
+
+        rows.push({
+          rowNumber,
+          full_name: (record["full_name"] ?? record["full name"] ?? "").toString().trim(),
+          contact_email: (record["contact_email"] ?? record["contact email"] ?? "") || null,
+          phone: (record["phone"] ?? "") || null,
+          admission_number: (record["admission_number"] ?? record["admission number"] ?? "").toString().trim(),
+          batch: (record["batch"] ?? "") || null,
+          emergency_contact_name: (record["emergency_contact_name"] ?? record["emergency contact name"] ?? "") || null,
+          emergency_contact_phone: (record["emergency_contact_phone"] ?? record["emergency contact phone"] ?? "") || null,
+          emergency_relationship: (record["emergency_relationship"] ?? record["emergency relationship"] ?? "") || null,
+          parent_name: (record["parent_name"] ?? record["parent name"] ?? "") || null,
+          parent_email: (record["parent_email"] ?? record["parent email"] ?? "") || null,
+          parent_phone: (record["parent_phone"] ?? record["parent phone"] ?? "") || null,
+          occupation: (record["occupation"] ?? "") || null,
+          relationship_type: (record["relationship_type"] ?? record["relationship type"] ?? null) as any,
+        });
+      });
 
       return { rows };
     } catch (err: any) {
-      return { rows: [], error: "Excel parser failed (xlsx library missing or parse error)." };
+      return { rows: [], error: "Excel parser failed (exceljs library missing or parse error)." };
     }
   }, []);
 

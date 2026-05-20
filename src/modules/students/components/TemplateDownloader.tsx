@@ -47,12 +47,13 @@ export function TemplateDownloader() {
     ];
 
     try {
-      const XLSX = await import("xlsx");
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "students");
-      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      const { Workbook } = await import("exceljs");
+      const workbook = new Workbook();
+      const worksheet = workbook.addWorksheet("students");
+      worksheet.addRow(headers);
+      sample.forEach((row) => worksheet.addRow(row));
+      const wbout = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

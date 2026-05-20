@@ -118,6 +118,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           { title: "Students", url: "/dashboard/staff/students", icon: GraduationCap },
           { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
           { title: "My Courses", url: "/dashboard/staff/courses", icon: BookOpen },
+          { title: "Canvas", url: "/dashboard/admin/assignments", icon: FileText },
         ],
       },
       {
