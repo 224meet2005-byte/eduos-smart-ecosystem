@@ -59,7 +59,7 @@ export function CanvasModal({ isOpen, onClose }: CanvasModalProps) {
             </div>
           </div>
 
-          <div className="border rounded-lg bg-background p-4">
+          <div className="rounded-3xl bg-background p-0 shadow-none">
             <CanvasEditor pages={pages} onChange={(p) => setPages(p)} />
           </div>
         </div>

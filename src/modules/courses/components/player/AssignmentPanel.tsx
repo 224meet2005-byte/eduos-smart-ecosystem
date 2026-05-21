@@ -24,7 +24,7 @@ import {
   getStudentSubmission,
   submitAssignment,
 } from "@/modules/courses/services/assignment.service";
-import { uploadAssignmentSubmission } from "@/modules/courses/services/upload.service";
+import { uploadSubmissionFile } from "@/modules/courses/services/upload.service";
 import { cn } from "@/lib/utils";
 import type { LmsLesson, LmsEnrollment, LmsAssignment, LmsAssignmentSubmission } from "@/types";
 
@@ -131,7 +131,7 @@ export function AssignmentPanel({
 
       // Upload files
       for (const file of selectedFiles) {
-        const uploadRes = await uploadAssignmentSubmission(
+        const uploadRes = await uploadSubmissionFile(
           file,
           studentId,
           assignment.id,

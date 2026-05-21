@@ -29,7 +29,7 @@ export default function CreateAssignment() {
       </div>
 
       <div className="mt-4">
-        <CanvasEditor pages={pages} onChange={(p) => setPages(p)} />
+        <CanvasEditor pages={pages} onChange={(p) => setPages(p)} onSendAssignment={() => { void handleSend(); }} />
       </div>
 
       <div className="flex gap-2 mt-4">
