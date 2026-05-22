@@ -1,0 +1,1 @@
+import{$ as r}from"./router-BMr5jsUI.mjs";const e={data:null,error:"Supabase is not configured.",success:!1};async function s(s,t=!0){if(!r)return e;let a=r.from("courses").select("*").eq("institute_id",s).order("name",{ascending:!0});t&&(a=a.eq("is_active",!0));const{data:n,error:o}=await a;return o?{data:null,error:o.message,success:!1}:{data:n,error:null,success:!0}}export{s};

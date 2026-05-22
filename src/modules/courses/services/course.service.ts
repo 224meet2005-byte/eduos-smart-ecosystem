@@ -6,7 +6,7 @@
 // Every function returns ApiResponse<T> — never throws.
 // ---------------------------------------------------------------------------
 
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
 import { publishCourseCurriculum } from "@/modules/courses/services/curriculum.service";
 import type {
   ApiResponse,
@@ -519,8 +519,19 @@ export async function archiveCourse(courseId: string): Promise<ApiResponse<LmsCo
 }
 
 export async function deleteCourse(courseId: string): Promise<ApiResponse<{ id: string }>> {
-  if (!supabase) return { data: null, error: "Supabase is not configured.", success: false };
-  const { error } = await supabase.from("lms_courses").delete().eq("id", courseId);
+  const db = supabaseAdmin ?? supabase;
+  if (!db) return { data: null, error: "Supabase is not configured.", success: false };
+
+  const { error: progressError } = await db
+    .from("lms_course_progress")
+    .delete()
+    .eq("course_id", courseId);
+
+  if (progressError) {
+    return { data: null, error: progressError.message, success: false };
+  }
+
+  const { error } = await db.from("lms_courses").delete().eq("id", courseId);
   if (error) return { data: null, error: error.message, success: false };
   return { data: { id: courseId }, error: null, success: true };
 }

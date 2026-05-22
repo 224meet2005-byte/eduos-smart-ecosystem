@@ -1,0 +1,1 @@
+const s={videos:"lms-course-videos",materials:"lms-course-materials",thumbnails:"lms-thumbnails",assignment_resources:"assignment-resources",assignment_submissions:"assignment-submissions"},e=7200,i=3600;export{i as a,e,s};

@@ -196,7 +196,7 @@ export interface StaffCourseAssignment {
   course_id: string;
   assigned_at: string;
   assigned_by: string | null;
-  course?: Course;
+  course?: LmsCourse;
 }
 
 export interface StaffBatchOption {
@@ -204,6 +204,14 @@ export interface StaffBatchOption {
   name: string;
   academic_year: string;
   course_name: string | null;
+  label: string;
+}
+
+export interface StaffCourseOption {
+  id: string;
+  name: string;
+  code: string | null;
+  status?: LmsCourseStatus;
   label: string;
 }
 
@@ -1463,6 +1471,7 @@ export interface CreateModulePayload {
   title: string;
   description?: string;
   position: number;
+  is_published?: boolean;
 }
 
 export interface CreateLessonPayload {

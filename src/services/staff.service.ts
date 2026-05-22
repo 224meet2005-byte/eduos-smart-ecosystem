@@ -21,7 +21,6 @@ import { generateStaffCredentials, generateTempPassword } from "@/utils/staffCre
 import { getErrorMessage } from "@/utils/helpers";
 import type {
   Staff,
-  Course,
   ApiResponse,
   AdmitStaffPayload,
   AdmitStaffResult,
@@ -30,6 +29,7 @@ import type {
   StaffBatchAssignment,
   StaffBatchOption,
   StaffCourseAssignment,
+  StaffCourseOption,
 } from "@/types";
 
 // ── Shared "not configured" error response ───────────────────────────────────
@@ -76,7 +76,7 @@ const STAFF_DETAIL_SELECT = `
   ),
   assigned_courses:staff_courses(
     id, institute_id, staff_id, course_id, assigned_at, assigned_by,
-    course:courses(id, name, code, is_active, created_at, updated_at)
+    course:lms_courses(id, title, status, created_at, updated_at)
   )
 `;
 
@@ -108,10 +108,10 @@ async function syncStaffCourseAssignments(
 
   if (courseIdsToAdd.length > 0) {
     const { data: validCourses, error: courseError } = await supabase
-      .from("courses")
+      .from("lms_courses")
       .select("id")
       .eq("institute_id", instituteId)
-      .eq("is_active", true)
+      .neq("status", "archived")
       .in("id", courseIdsToAdd);
 
     if (courseError) {
@@ -162,7 +162,7 @@ async function syncStaffCourseAssignments(
   const { data: finalRows, error: finalError } = await supabase
     .from("staff_courses")
     .select(
-      "id, institute_id, staff_id, course_id, assigned_at, assigned_by, course:courses(id, name, code, is_active, created_at, updated_at)",
+      "id, institute_id, staff_id, course_id, assigned_at, assigned_by, course:lms_courses(id, title, status, created_at, updated_at)",
     )
     .eq("staff_id", staffId)
     .eq("institute_id", instituteId)
@@ -528,6 +528,180 @@ export async function removeStaffBatchAssignment(payload: {
   if (error) return { data: null, error: error.message, success: false };
 
   invalidateStaffBatchAssignmentsCache(payload.staff_id);
+  return { data: null, error: null, success: true };
+}
+
+/**
+ * Return explicit staff_courses rows for a staff member.
+ */
+export async function getStaffCourses(staffId: string): Promise<ApiResponse<StaffCourseAssignment[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(staffId)) {
+    return { data: null, error: "Invalid staff id.", success: false };
+  }
+
+  const cacheKey = cacheKeyForStaffCourseAssignments(staffId);
+
+  try {
+    const data = await cachedQuery(cacheKey, 30_000, async () => {
+      const { data: rows, error } = await supabase
+        .from("staff_courses")
+        .select(
+          "id, institute_id, staff_id, course_id, assigned_at, assigned_by, course:lms_courses(id, title, status, created_at, updated_at)",
+        )
+        .eq("staff_id", staffId)
+        .order("assigned_at", { ascending: false });
+
+      if (error) throw error;
+      return (rows ?? []) as StaffCourseAssignment[];
+    });
+
+    return { data, error: null, success: true };
+  } catch (err) {
+    return { data: null, error: getErrorMessage(err), success: false };
+  }
+}
+
+/**
+ * Return LMS courses that can be assigned to staff.
+ */
+export async function getAssignableCourseOptions(
+  instituteId: string,
+): Promise<ApiResponse<StaffCourseOption[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(instituteId)) {
+    return { data: null, error: "Invalid institute id.", success: false };
+  }
+
+  const { data, error } = await supabase
+    .from("lms_courses")
+    .select("id, title, status")
+    .eq("institute_id", instituteId)
+    .neq("status", "archived")
+    .order("title", { ascending: true });
+
+  if (error) return { data: null, error: error.message, success: false };
+
+  const options = (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.title,
+    code: null,
+    status: row.status,
+    label: row.title,
+  })) as StaffCourseOption[];
+
+  return { data: options, error: null, success: true };
+}
+
+/**
+ * Assign a single course to a staff member via staff_courses.
+ */
+export async function assignCourseToStaff(payload: {
+  institute_id: string;
+  staff_id: string;
+  course_id: string;
+  assigned_by?: string | null;
+}): Promise<ApiResponse<StaffCourseAssignment>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (
+    !isValidUuid(payload.institute_id) ||
+    !isValidUuid(payload.staff_id) ||
+    !isValidUuid(payload.course_id)
+  ) {
+    return { data: null, error: "Invalid assignment payload.", success: false };
+  }
+
+  const { data: staffRow, error: staffError } = await supabase
+    .from("staff")
+    .select("id")
+    .eq("id", payload.staff_id)
+    .eq("institute_id", payload.institute_id)
+    .maybeSingle();
+
+  if (staffError) return { data: null, error: staffError.message, success: false };
+  if (!staffRow) {
+    return { data: null, error: "Staff member not found for this institute.", success: false };
+  }
+
+  const { data: linkedCourse, error: courseError } = await supabase
+    .from("lms_courses")
+    .select("id, status")
+    .eq("id", payload.course_id)
+    .eq("institute_id", payload.institute_id)
+    .neq("status", "archived")
+    .maybeSingle();
+
+  if (courseError) return { data: null, error: courseError.message, success: false };
+  if (!linkedCourse) {
+    return {
+      data: null,
+      error: "Selected course is invalid or does not belong to this institute.",
+      success: false,
+    };
+  }
+
+  const { data: existingAssignment, error: existingError } = await supabase
+    .from("staff_courses")
+    .select("id")
+    .eq("staff_id", payload.staff_id)
+    .eq("course_id", payload.course_id)
+    .maybeSingle();
+
+  if (existingError) return { data: null, error: existingError.message, success: false };
+  if (existingAssignment) {
+    return { data: null, error: "Course already assigned to this staff member.", success: false };
+  }
+
+  const { data, error } = await supabase
+    .from("staff_courses")
+    .insert({
+      institute_id: payload.institute_id,
+      staff_id: payload.staff_id,
+      course_id: payload.course_id,
+      assigned_by: payload.assigned_by ?? null,
+    })
+    .select(
+      "id, institute_id, staff_id, course_id, assigned_at, assigned_by, course:lms_courses(id, title, status, created_at, updated_at)",
+    )
+    .single();
+
+  if (error) {
+    const message = getErrorMessage(error);
+    if (/duplicate key|unique/i.test(message)) {
+      return { data: null, error: "Course already assigned to this staff member.", success: false };
+    }
+    return { data: null, error: message, success: false };
+  }
+
+  invalidateStaffCourseAssignmentsCache(payload.staff_id);
+  return { data: data as StaffCourseAssignment, error: null, success: true };
+}
+
+/**
+ * Remove a staff_courses assignment row.
+ */
+export async function removeStaffCourse(payload: {
+  assignment_id: string;
+  staff_id: string;
+}): Promise<ApiResponse<null>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  if (!isValidUuid(payload.assignment_id) || !isValidUuid(payload.staff_id)) {
+    return { data: null, error: "Invalid assignment id.", success: false };
+  }
+
+  const { error } = await supabase
+    .from("staff_courses")
+    .delete()
+    .eq("id", payload.assignment_id)
+    .eq("staff_id", payload.staff_id);
+
+  if (error) return { data: null, error: error.message, success: false };
+
+  invalidateStaffCourseAssignmentsCache(payload.staff_id);
   return { data: null, error: null, success: true };
 }
 

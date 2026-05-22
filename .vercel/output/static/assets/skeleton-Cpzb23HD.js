@@ -1,0 +1,1 @@
+import{j as s}from"./vendor-ui-COnqnM1k.js";import{c as r}from"./utils-nh_-kO88.js";function a({className:a,...m}){return s.jsx("div",{className:r("animate-pulse rounded-md bg-primary/10",a),...m})}export{a as S};

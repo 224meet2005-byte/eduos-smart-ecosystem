@@ -37,9 +37,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuthStore } from "@/store/authStore";
-import type { Staff, StaffAssignment, StaffBatchAssignment, StaffBatchOption } from "@/types";
+import type {
+  Staff,
+  StaffAssignment,
+  StaffBatchAssignment,
+  StaffBatchOption,
+  StaffCourseAssignment,
+  StaffCourseOption,
+} from "@/types";
 import { getInitials, formatDate, copyToClipboard } from "@/utils/helpers";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { SearchInput } from "@/components/ui/SearchInput";
 import {
   resetStaffPassword,
   getStaffAssignments,
@@ -47,6 +55,10 @@ import {
   getAssignableBatchOptions,
   assignBatchToStaff,
   removeStaffBatchAssignment,
+  getStaffCourses,
+  getAssignableCourseOptions,
+  assignCourseToStaff,
+  removeStaffCourse,
 } from "@/services/staff.service";
 import { toast } from "sonner";
 
@@ -63,6 +75,8 @@ interface StaffProfileSheetProps {
   onEdit?: () => void;
   /** Optional — when provided shows a Delete button in the footer. */
   onDelete?: () => void;
+  /** Called when assigned courses change so parent state can stay in sync. */
+  onAssignedCoursesChange?: (courses: StaffCourseAssignment[]) => void;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -95,6 +109,7 @@ export function StaffProfileSheet({
   onClose,
   onEdit,
   onDelete,
+  onAssignedCoursesChange,
 }: StaffProfileSheetProps) {
   const authUser = useAuthStore((s) => s.user);
 
@@ -107,7 +122,16 @@ export function StaffProfileSheet({
   const [batchAssignmentError, setBatchAssignmentError] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [isAssigningBatch, setIsAssigningBatch] = useState(false);
+  const [staffCourseAssignments, setStaffCourseAssignments] = useState<StaffCourseAssignment[]>([]);
+  const [availableCourseOptions, setAvailableCourseOptions] = useState<StaffCourseOption[]>([]);
+  const [isLoadingCourseAssignments, setIsLoadingCourseAssignments] = useState(false);
+  const [isLoadingCourseOptions, setIsLoadingCourseOptions] = useState(false);
+  const [courseAssignmentError, setCourseAssignmentError] = useState<string | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [courseSearchQuery, setCourseSearchQuery] = useState("");
+  const [isAssigningCourse, setIsAssigningCourse] = useState(false);
   const [removingAssignmentId, setRemovingAssignmentId] = useState<string | null>(null);
+  const [removingCourseAssignmentId, setRemovingCourseAssignmentId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -120,6 +144,8 @@ export function StaffProfileSheet({
     return false;
   }, [authUser]);
 
+  const canManageCourseAssignments = canManageBatchAssignments;
+
   const assignedBatchIds = useMemo(
     () => new Set(batchAssignments.map((a) => a.batch_id)),
     [batchAssignments],
@@ -129,6 +155,33 @@ export function StaffProfileSheet({
     () => availableBatchOptions.filter((option) => !assignedBatchIds.has(option.id)),
     [availableBatchOptions, assignedBatchIds],
   );
+
+  const assignedCourseIds = useMemo(
+    () => new Set(staffCourseAssignments.map((a) => a.course_id)),
+    [staffCourseAssignments],
+  );
+
+  const availableCourseCandidates = useMemo(
+    () => availableCourseOptions.filter((option) => !assignedCourseIds.has(option.id)),
+    [availableCourseOptions, assignedCourseIds],
+  );
+
+  const courseOptionLabel = useCallback((course: StaffCourseOption) => {
+    if (course.status === "draft") return `${course.label} (draft)`;
+    if (course.status === "archived") return `${course.label} (archived)`;
+    return course.label;
+  }, []);
+
+  const filteredCourseCandidates = useMemo(() => {
+    const query = courseSearchQuery.trim().toLowerCase();
+    if (!query) return availableCourseCandidates;
+    return availableCourseCandidates.filter(
+      (course) =>
+        course.name.toLowerCase().includes(query) ||
+        (course.code?.toLowerCase().includes(query) ?? false) ||
+        course.label.toLowerCase().includes(query),
+    );
+  }, [availableCourseCandidates, courseSearchQuery]);
 
   const courseAssignments = useMemo(
     () => assignments.filter((a) => Boolean(a.course_name || a.subject_name)),
@@ -161,6 +214,47 @@ export function StaffProfileSheet({
     setIsLoadingBatchAssignments(false);
   }, []);
 
+  const syncAssignedCoursesToParent = useCallback(
+    (courses: StaffCourseAssignment[]) => {
+      onAssignedCoursesChange?.(courses);
+    },
+    [onAssignedCoursesChange],
+  );
+
+  const fetchStaffCourseAssignments = useCallback(
+    async (staffId: string) => {
+      setIsLoadingCourseAssignments(true);
+      setCourseAssignmentError(null);
+      const result = await getStaffCourses(staffId);
+
+      if (result.success && result.data) {
+        setStaffCourseAssignments(result.data);
+        syncAssignedCoursesToParent(result.data);
+      } else {
+        setStaffCourseAssignments([]);
+        syncAssignedCoursesToParent([]);
+        setCourseAssignmentError(result.error ?? "Failed to load assigned courses.");
+      }
+
+      setIsLoadingCourseAssignments(false);
+    },
+    [syncAssignedCoursesToParent],
+  );
+
+  const fetchAssignableCourseOptions = useCallback(async (instituteId: string) => {
+    setIsLoadingCourseOptions(true);
+    const result = await getAssignableCourseOptions(instituteId);
+
+    if (result.success && result.data) {
+      setAvailableCourseOptions(result.data);
+    } else {
+      setAvailableCourseOptions([]);
+      setCourseAssignmentError(result.error ?? "Failed to load available courses.");
+    }
+
+    setIsLoadingCourseOptions(false);
+  }, []);
+
   const fetchAssignableBatchOptions = useCallback(async (instituteId: string) => {
     setIsLoadingBatchOptions(true);
     const result = await getAssignableBatchOptions(instituteId);
@@ -179,20 +273,31 @@ export function StaffProfileSheet({
     if (isOpen && staff?.id) {
       fetchAssignments(staff.id);
       fetchBatchAssignments(staff.id);
+      fetchStaffCourseAssignments(staff.id);
       if (canManageBatchAssignments && staff.institute_id) {
         fetchAssignableBatchOptions(staff.institute_id);
+      }
+      if (canManageCourseAssignments && staff.institute_id) {
+        fetchAssignableCourseOptions(staff.institute_id);
       }
       setNewPassword(null);
       setIsViewing(false);
       setSelectedBatchId("");
+      setSelectedCourseId("");
+      setCourseSearchQuery("");
     } else {
       setAssignments([]);
       setBatchAssignments([]);
+      setStaffCourseAssignments([]);
       setAvailableBatchOptions([]);
+      setAvailableCourseOptions([]);
       setNewPassword(null);
       setIsViewing(false);
       setSelectedBatchId("");
+      setSelectedCourseId("");
+      setCourseSearchQuery("");
       setBatchAssignmentError(null);
+      setCourseAssignmentError(null);
     }
   }, [
     isOpen,
@@ -200,8 +305,11 @@ export function StaffProfileSheet({
     staff?.institute_id,
     fetchAssignments,
     fetchBatchAssignments,
+    fetchStaffCourseAssignments,
     fetchAssignableBatchOptions,
+    fetchAssignableCourseOptions,
     canManageBatchAssignments,
+    canManageCourseAssignments,
   ]);
 
   useEffect(() => {
@@ -210,6 +318,77 @@ export function StaffProfileSheet({
       setSelectedBatchId("");
     }
   }, [selectedBatchId, availableBatchCandidates]);
+
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    if (!availableCourseCandidates.some((course) => course.id === selectedCourseId)) {
+      setSelectedCourseId("");
+    }
+  }, [selectedCourseId, availableCourseCandidates]);
+
+  async function handleAssignSelectedCourse() {
+    if (!staff?.id || !staff.institute_id || !selectedCourseId) return;
+
+    setIsAssigningCourse(true);
+    setCourseAssignmentError(null);
+
+    const assignedBy = authUser?.id ?? null;
+
+    const result = await assignCourseToStaff({
+      institute_id: staff.institute_id,
+      staff_id: staff.id,
+      course_id: selectedCourseId,
+      assigned_by: assignedBy,
+    });
+
+    setIsAssigningCourse(false);
+
+    if (result.success && result.data) {
+      setStaffCourseAssignments((prev) => {
+        if (prev.some((a) => a.course_id === result.data!.course_id)) return prev;
+        const next = [result.data!, ...prev];
+        syncAssignedCoursesToParent(next);
+        return next;
+      });
+      setSelectedCourseId("");
+      setCourseSearchQuery("");
+      toast.success("Course assigned successfully.");
+      void fetchStaffCourseAssignments(staff.id);
+      return;
+    }
+
+    const message = result.error ?? "Failed to assign course.";
+    setCourseAssignmentError(message);
+    toast.error(message);
+  }
+
+  async function handleRemoveCourseAssignment(assignmentId: string) {
+    if (!staff?.id) return;
+
+    setRemovingCourseAssignmentId(assignmentId);
+    const previous = staffCourseAssignments;
+    const next = previous.filter((a) => a.id !== assignmentId);
+    setStaffCourseAssignments(next);
+    syncAssignedCoursesToParent(next);
+
+    const result = await removeStaffCourse({
+      assignment_id: assignmentId,
+      staff_id: staff.id,
+    });
+
+    setRemovingCourseAssignmentId(null);
+
+    if (!result.success) {
+      setStaffCourseAssignments(previous);
+      syncAssignedCoursesToParent(previous);
+      const message = result.error ?? "Failed to remove course assignment.";
+      setCourseAssignmentError(message);
+      toast.error(message);
+      return;
+    }
+
+    toast.success("Course assignment removed.");
+  }
 
   async function handleAssignSelectedBatch() {
     if (!staff?.id || !staff.institute_id || !selectedBatchId) return;
@@ -470,25 +649,116 @@ export function StaffProfileSheet({
           </div>
 
           <SectionLabel>Assigned Courses</SectionLabel>
-          <div className="px-5 py-4">
-            {staff.assigned_courses?.length ? (
+          <div className="px-5 py-4 space-y-3">
+            {canManageCourseAssignments && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+                <SearchInput
+                  value={courseSearchQuery}
+                  onChange={setCourseSearchQuery}
+                  placeholder="Search courses…"
+                  className="w-full"
+                />
+
+                {isLoadingCourseOptions ? (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Loading courses…
+                  </div>
+                ) : (
+                  <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+                    <SelectTrigger className="w-full" disabled={filteredCourseCandidates.length === 0}>
+                      <SelectValue
+                        placeholder={
+                          filteredCourseCandidates.length === 0
+                            ? "No available courses"
+                            : "Select available course"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredCourseCandidates.map((course) => (
+                        <SelectItem key={course.id} value={course.id}>
+                          {courseOptionLabel(course)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {!isLoadingCourseOptions && availableCourseCandidates.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    All linked LMS courses are already assigned or unavailable.
+                  </p>
+                )}
+
+                {!isLoadingCourseOptions &&
+                  availableCourseCandidates.length > 0 &&
+                  filteredCourseCandidates.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No courses match your search.</p>
+                  )}
+
+                <button
+                  type="button"
+                  onClick={handleAssignSelectedCourse}
+                  disabled={isAssigningCourse || !selectedCourseId || isLoadingCourseOptions}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isAssigningCourse ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  Assign course
+                </button>
+              </div>
+            )}
+
+            {courseAssignmentError && (
+              <p className="text-xs text-destructive">{courseAssignmentError}</p>
+            )}
+
+            {isLoadingCourseAssignments ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading assigned courses…
+              </div>
+            ) : staffCourseAssignments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No assigned courses yet</p>
+            ) : (
               <div className="space-y-2">
-                {staff.assigned_courses.map((assignment) => (
+                {staffCourseAssignments.map((assignment) => (
                   <div key={assignment.id} className="rounded-lg border border-border bg-background p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <BookOpen className="h-3.5 w-3.5 text-primary" />
-                      <p className="text-sm font-semibold text-foreground">
-                        {assignment.course?.name ?? "Unknown course"}
-                      </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <BookOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {assignment.course?.name ?? "Unknown course"}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-5.5">
+                          {assignment.course?.code ?? "No code"}
+                        </p>
+                      </div>
+                      {canManageCourseAssignments && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCourseAssignment(assignment.id)}
+                          disabled={removingCourseAssignmentId === assignment.id}
+                          className="shrink-0 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                          aria-label="Remove course assignment"
+                        >
+                          {removingCourseAssignmentId === assignment.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                        </button>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground pl-5.5">
-                      {assignment.course?.code ?? "No code"}
-                    </p>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No assigned courses yet</p>
             )}
           </div>
 

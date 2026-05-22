@@ -37,6 +37,10 @@ function StaffPage() {
     setEditingStaff(s);
   }, []);
 
+  const handleAssignedCoursesChange = useCallback((assigned_courses: Staff["assigned_courses"]) => {
+    setSelectedStaff((prev) => (prev ? { ...prev, assigned_courses } : prev));
+  }, []);
+
   const handleDelete = useCallback(
     async (s: Staff) => {
       if (window.confirm(`Are you sure you want to remove ${s.user?.name} from staff?`)) {
@@ -114,6 +118,7 @@ function StaffPage() {
         onClose={() => setSelectedStaff(null)}
         onEdit={selectedStaff ? () => handleEdit(selectedStaff) : undefined}
         onDelete={() => selectedStaff && handleDelete(selectedStaff)}
+        onAssignedCoursesChange={handleAssignedCoursesChange}
       />
 
       {/* Admit Staff Modal */}

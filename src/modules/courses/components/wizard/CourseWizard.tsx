@@ -48,6 +48,7 @@ import {
   updateCourse,
   getCourseById,
 } from "@/modules/courses/services/course.service";
+import { publishCourseCurriculum } from "@/modules/courses/services/curriculum.service";
 import { courseKeys, useCourseCurriculum, useCategories } from "@/modules/courses/hooks/useCourses";
 import { Step1BasicInfo } from "@/modules/courses/components/wizard/Step1BasicInfo";
 import { Step2Media } from "@/modules/courses/components/wizard/Step2Media";
@@ -511,10 +512,23 @@ export function CourseWizard({
 
   // Existing course data (in edit mode)
   const [existingCourse, setExistingCourse] = useState<LmsCourse | null>(null);
+  const publishedCurriculumSyncRef = useRef<string | null>(null);
   const [draftStep1, setDraftStep1] = useState<Partial<CreateCoursePayload> | null>(null);
 
   // Curriculum query
   const { data: curriculum, refetch: refetchCurriculum } = useCourseCurriculum(state.courseId);
+
+  useEffect(() => {
+    if (!state.courseId || !existingCourse || existingCourse.status !== "published") return;
+    if (publishedCurriculumSyncRef.current === state.courseId) return;
+
+    publishedCurriculumSyncRef.current = state.courseId;
+    void (async () => {
+      const result = await publishCourseCurriculum(state.courseId!);
+      if (!result.success) return;
+      void refetchCurriculum();
+    })();
+  }, [state.courseId, existingCourse, refetchCurriculum]);
   const modules = curriculum?.modules ?? [];
 
   // Categories for Step 1
@@ -839,6 +853,7 @@ export function CourseWizard({
               instituteId={instituteId}
               userId={userId}
               modules={modules}
+              isCoursePublished={existingCourse?.status === "published"}
               onRefresh={() => refetchCurriculum()}
             />
           </div>
@@ -859,6 +874,7 @@ export function CourseWizard({
               instituteId={instituteId}
               userId={userId}
               modules={modules}
+              isCoursePublished={existingCourse?.status === "published"}
               onRefresh={() => refetchCurriculum()}
               openEditorOnLessonAdd
             />

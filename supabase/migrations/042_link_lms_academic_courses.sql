@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_lms_courses_academic_course ON public.lms_courses
 
 DROP POLICY IF EXISTS "lms_course_staff_read" ON public.lms_courses;
 DROP POLICY IF EXISTS "lms_course_staff_own" ON public.lms_courses;
+DROP POLICY IF EXISTS "lms_course_staff_assigned" ON public.lms_courses;
 
 -- Staff can manage (ALL) courses they created
 CREATE POLICY "lms_course_staff_own" ON public.lms_courses
@@ -39,7 +40,7 @@ CREATE POLICY "lms_course_staff_assigned" ON public.lms_courses
     AND get_my_role() = 'staff'
     AND (
       created_by = auth.uid()
-      OR course_id IN (
+      OR id IN (
         SELECT sc.course_id 
         FROM public.staff_courses sc
         JOIN public.staff s ON s.id = sc.staff_id
@@ -60,7 +61,7 @@ RETURNS BOOLEAN AS $$
     WHERE lc.id = p_lms_course_id
     AND (
       lc.created_by = auth.uid()
-      OR lc.course_id IN (
+      OR lc.id IN (
         SELECT sc.course_id 
         FROM public.staff_courses sc
         JOIN public.staff s ON s.id = sc.staff_id
@@ -71,6 +72,7 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 DROP POLICY IF EXISTS "lms_mod_student_enrolled" ON public.lms_modules;
+DROP POLICY IF EXISTS "lms_mod_staff_read" ON public.lms_modules;
 CREATE POLICY "lms_mod_staff_read" ON public.lms_modules
   FOR SELECT
   USING (
@@ -80,6 +82,7 @@ CREATE POLICY "lms_mod_staff_read" ON public.lms_modules
   );
 
 DROP POLICY IF EXISTS "lms_lesson_student" ON public.lms_lessons;
+DROP POLICY IF EXISTS "lms_lesson_staff_read" ON public.lms_lessons;
 CREATE POLICY "lms_lesson_staff_read" ON public.lms_lessons
   FOR SELECT
   USING (

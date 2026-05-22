@@ -45,7 +45,7 @@ export async function createModule(
       description: payload.description ?? null,
       position: payload.position,
       institute_id: instituteId,
-      is_published: false,
+      is_published: payload.is_published ?? false,
     })
     .select("*")
     .single();

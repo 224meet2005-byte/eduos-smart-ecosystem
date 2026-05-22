@@ -72,6 +72,7 @@ interface CurriculumEditorProps {
   instituteId: string;
   userId: string;
   modules: LocalModule[];
+  isCoursePublished?: boolean;
   onRefresh: () => void;
   /** When true, newly added lessons open the content editor immediately (Step 4). */
   openEditorOnLessonAdd?: boolean;
@@ -727,6 +728,7 @@ export function CurriculumEditor({
   instituteId,
   userId,
   modules: initialModules,
+  isCoursePublished = false,
   onRefresh,
   openEditorOnLessonAdd = false,
 }: CurriculumEditorProps) {
@@ -766,7 +768,13 @@ export function CurriculumEditor({
     async (title: string, description: string) => {
       const nextPosition = localModules.length;
       const result = await createModule(
-        { course_id: courseId, title, description, position: nextPosition },
+        {
+          course_id: courseId,
+          title,
+          description,
+          position: nextPosition,
+          is_published: isCoursePublished,
+        },
         instituteId,
       );
       if (!result.success || !result.data) {
@@ -822,6 +830,7 @@ export function CurriculumEditor({
           lesson_type: lessonType,
           position,
           is_preview: isPreview,
+          is_published: isCoursePublished,
         },
         instituteId,
       );
