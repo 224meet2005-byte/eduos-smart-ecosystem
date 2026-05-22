@@ -24,11 +24,17 @@ function StaffPage() {
   const { staff, isLoading, error, fetchStaff, deleteStaffMember } = useStaff({ instituteId });
 
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
   const handleView = useCallback((s: Staff) => {
     setSelectedStaff(s);
+  }, []);
+
+  const handleEdit = useCallback((s: Staff) => {
+    setSelectedStaff(null);
+    setEditingStaff(s);
   }, []);
 
   const handleDelete = useCallback(
@@ -106,6 +112,7 @@ function StaffPage() {
         staff={selectedStaff}
         isOpen={selectedStaff !== null}
         onClose={() => setSelectedStaff(null)}
+        onEdit={selectedStaff ? () => handleEdit(selectedStaff) : undefined}
         onDelete={() => selectedStaff && handleDelete(selectedStaff)}
       />
 
@@ -128,8 +135,39 @@ function StaffPage() {
 
             <StaffAdmissionForm
               instituteId={instituteId ?? ""}
+              mode="create"
               onSuccess={() => fetchStaff()}
               onCancel={() => setIsAdmitModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {editingStaff && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditingStaff(null);
+          }}
+        >
+          <div className="relative bg-card rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setEditingStaff(null)}
+              className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <StaffAdmissionForm
+              instituteId={instituteId ?? ""}
+              mode="edit"
+              staff={editingStaff}
+              onSuccess={() => {
+                setEditingStaff(null);
+                fetchStaff();
+              }}
+              onCancel={() => setEditingStaff(null)}
             />
           </div>
         </div>

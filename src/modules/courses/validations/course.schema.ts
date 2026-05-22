@@ -54,6 +54,14 @@ export const createCourseSchema = z
 
     category_id: uuidOrEmpty,
 
+    course_id: z
+      .string()
+      .optional()
+      .or(z.literal(""))
+      .refine((val) => !val || z.string().uuid().safeParse(val).success, {
+        message: "Please select a valid academic course",
+      }),
+
     difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"], {
       required_error: "Please select a difficulty level",
     }),

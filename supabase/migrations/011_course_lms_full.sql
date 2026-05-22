@@ -533,39 +533,47 @@ CREATE INDEX IF NOT EXISTS idx_lms_cert_course  ON public.lms_certificates(cours
 -- SECTION 19 — updated_at triggers
 -- (reuses update_updated_at_column() from migration 002)
 -- ============================================================
-
+DROP TRIGGER IF EXISTS trg_lms_categories_updated_at ON public.lms_categories;
 CREATE TRIGGER trg_lms_categories_updated_at
   BEFORE UPDATE ON public.lms_categories
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_courses_updated_at ON public.lms_courses;
 CREATE TRIGGER trg_lms_courses_updated_at
   BEFORE UPDATE ON public.lms_courses
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_modules_updated_at ON public.lms_modules;
 CREATE TRIGGER trg_lms_modules_updated_at
   BEFORE UPDATE ON public.lms_modules
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_lessons_updated_at ON public.lms_lessons;
 CREATE TRIGGER trg_lms_lessons_updated_at
   BEFORE UPDATE ON public.lms_lessons
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_enrollments_updated_at ON public.lms_enrollments;
 CREATE TRIGGER trg_lms_enrollments_updated_at
   BEFORE UPDATE ON public.lms_enrollments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_lp_updated_at ON public.lms_lesson_progress;
 CREATE TRIGGER trg_lms_lp_updated_at
   BEFORE UPDATE ON public.lms_lesson_progress
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_quizzes_updated_at ON public.lms_quizzes;
 CREATE TRIGGER trg_lms_quizzes_updated_at
   BEFORE UPDATE ON public.lms_quizzes
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_assignments_updated_at ON public.lms_assignments;
 CREATE TRIGGER trg_lms_assignments_updated_at
   BEFORE UPDATE ON public.lms_assignments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_lms_sub_updated_at ON public.lms_assignment_submissions;
 CREATE TRIGGER trg_lms_sub_updated_at
   BEFORE UPDATE ON public.lms_assignment_submissions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -589,7 +597,7 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
+DROP TRIGGER IF EXISTS trg_lms_sync_lesson_count ON public.lms_lessons;
 CREATE TRIGGER trg_lms_sync_lesson_count
   AFTER INSERT OR UPDATE OR DELETE ON public.lms_lessons
   FOR EACH ROW EXECUTE FUNCTION lms_sync_lesson_count();
@@ -609,7 +617,7 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
+DROP TRIGGER IF EXISTS trg_lms_sync_module_count ON public.lms_modules;
 CREATE TRIGGER trg_lms_sync_module_count
   AFTER INSERT OR UPDATE OR DELETE ON public.lms_modules
   FOR EACH ROW EXECUTE FUNCTION lms_sync_module_count();
@@ -636,7 +644,7 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
+DROP TRIGGER IF EXISTS trg_lms_sync_enrollment_count ON public.lms_enrollments;
 CREATE TRIGGER trg_lms_sync_enrollment_count
   AFTER INSERT OR UPDATE OR DELETE ON public.lms_enrollments
   FOR EACH ROW EXECUTE FUNCTION lms_sync_enrollment_count();
@@ -695,7 +703,7 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
+DROP TRIGGER IF EXISTS trg_lms_update_course_progress ON public.lms_lesson_progress;
 CREATE TRIGGER trg_lms_update_course_progress
   AFTER INSERT OR UPDATE ON public.lms_lesson_progress
   FOR EACH ROW EXECUTE FUNCTION lms_update_course_progress();
@@ -735,9 +743,96 @@ RETURNS BOOLEAN AS $$
   )
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
+-- Helper: is current user the creator/owner of a course? (bypasses RLS via SECURITY DEFINER)
+CREATE OR REPLACE FUNCTION lms_is_course_owner(p_course_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.lms_courses WHERE id = p_course_id AND created_by = auth.uid()
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- lms_categories
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Make policies idempotent: drop existing policies before creating
+DROP POLICY IF EXISTS "lms_cat_super_admin" ON public.lms_categories;
+DROP POLICY IF EXISTS "lms_cat_admin_manage" ON public.lms_categories;
+DROP POLICY IF EXISTS "lms_cat_student_read" ON public.lms_categories;
+
+DROP POLICY IF EXISTS "lms_course_super_admin" ON public.lms_courses;
+DROP POLICY IF EXISTS "lms_course_admin_manage" ON public.lms_courses;
+DROP POLICY IF EXISTS "lms_course_staff_own" ON public.lms_courses;
+DROP POLICY IF EXISTS "lms_course_staff_read" ON public.lms_courses;
+DROP POLICY IF EXISTS "lms_course_student_enrolled" ON public.lms_courses;
+
+DROP POLICY IF EXISTS "lms_mod_super_admin" ON public.lms_modules;
+DROP POLICY IF EXISTS "lms_mod_admin" ON public.lms_modules;
+DROP POLICY IF EXISTS "lms_mod_staff_own" ON public.lms_modules;
+DROP POLICY IF EXISTS "lms_mod_student_enrolled" ON public.lms_modules;
+
+DROP POLICY IF EXISTS "lms_lesson_super_admin" ON public.lms_lessons;
+DROP POLICY IF EXISTS "lms_lesson_admin" ON public.lms_lessons;
+DROP POLICY IF EXISTS "lms_lesson_staff_own" ON public.lms_lessons;
+DROP POLICY IF EXISTS "lms_lesson_student" ON public.lms_lessons;
+
+DROP POLICY IF EXISTS "lms_mat_super_admin" ON public.lms_lesson_materials;
+DROP POLICY IF EXISTS "lms_mat_admin" ON public.lms_lesson_materials;
+DROP POLICY IF EXISTS "lms_mat_staff_own" ON public.lms_lesson_materials;
+DROP POLICY IF EXISTS "lms_mat_student_enrolled" ON public.lms_lesson_materials;
+
+DROP POLICY IF EXISTS "lms_enroll_super_admin" ON public.lms_enrollments;
+DROP POLICY IF EXISTS "lms_enroll_admin" ON public.lms_enrollments;
+DROP POLICY IF EXISTS "lms_enroll_staff_read" ON public.lms_enrollments;
+DROP POLICY IF EXISTS "lms_enroll_student_own" ON public.lms_enrollments;
+
+DROP POLICY IF EXISTS "lms_lp_super_admin" ON public.lms_lesson_progress;
+DROP POLICY IF EXISTS "lms_lp_admin_read" ON public.lms_lesson_progress;
+DROP POLICY IF EXISTS "lms_lp_staff_read" ON public.lms_lesson_progress;
+DROP POLICY IF EXISTS "lms_lp_student_own" ON public.lms_lesson_progress;
+
+DROP POLICY IF EXISTS "lms_cp_super_admin" ON public.lms_course_progress;
+DROP POLICY IF EXISTS "lms_cp_admin_read" ON public.lms_course_progress;
+DROP POLICY IF EXISTS "lms_cp_staff_read" ON public.lms_course_progress;
+DROP POLICY IF EXISTS "lms_cp_student_own" ON public.lms_course_progress;
+
+DROP POLICY IF EXISTS "lms_quiz_admin" ON public.lms_quizzes;
+DROP POLICY IF EXISTS "lms_quiz_staff_own" ON public.lms_quizzes;
+DROP POLICY IF EXISTS "lms_quiz_student_enrolled" ON public.lms_quizzes;
+
+DROP POLICY IF EXISTS "lms_qq_read" ON public.lms_quiz_questions;
+DROP POLICY IF EXISTS "lms_qq_manage" ON public.lms_quiz_questions;
+
+DROP POLICY IF EXISTS "lms_qc_read" ON public.lms_quiz_choices;
+DROP POLICY IF EXISTS "lms_qc_manage" ON public.lms_quiz_choices;
+
+DROP POLICY IF EXISTS "lms_qa_admin_read" ON public.lms_quiz_attempts;
+DROP POLICY IF EXISTS "lms_qa_staff_read" ON public.lms_quiz_attempts;
+DROP POLICY IF EXISTS "lms_qa_student_own" ON public.lms_quiz_attempts;
+
+DROP POLICY IF EXISTS "lms_qaa_student_own" ON public.lms_quiz_attempt_answers;
+DROP POLICY IF EXISTS "lms_qaa_instructor_read" ON public.lms_quiz_attempt_answers;
+
+DROP POLICY IF EXISTS "lms_assign_admin" ON public.lms_assignments;
+DROP POLICY IF EXISTS "lms_assign_staff_own" ON public.lms_assignments;
+DROP POLICY IF EXISTS "lms_assign_student_enrolled" ON public.lms_assignments;
+
+DROP POLICY IF EXISTS "lms_sub_admin_read" ON public.lms_assignment_submissions;
+DROP POLICY IF EXISTS "lms_sub_staff_grade" ON public.lms_assignment_submissions;
+DROP POLICY IF EXISTS "lms_sub_student_own" ON public.lms_assignment_submissions;
+
+DROP POLICY IF EXISTS "lms_cert_admin" ON public.lms_certificates;
+DROP POLICY IF EXISTS "lms_cert_student_own" ON public.lms_certificates;
+
+-- Storage object policies
+DROP POLICY IF EXISTS "lms_video_upload" ON storage.objects;
+DROP POLICY IF EXISTS "lms_video_read" ON storage.objects;
+DROP POLICY IF EXISTS "lms_video_delete" ON storage.objects;
+DROP POLICY IF EXISTS "lms_mat_upload" ON storage.objects;
+DROP POLICY IF EXISTS "lms_mat_read" ON storage.objects;
+DROP POLICY IF EXISTS "lms_mat_delete" ON storage.objects;
+DROP POLICY IF EXISTS "lms_thumb_upload" ON storage.objects;
+DROP POLICY IF EXISTS "lms_asub_upload" ON storage.objects;
+DROP POLICY IF EXISTS "lms_asub_read" ON storage.objects;
 CREATE POLICY "lms_cat_super_admin" ON public.lms_categories
   FOR ALL USING (is_super_admin()) WITH CHECK (is_super_admin());
 
@@ -811,16 +906,12 @@ CREATE POLICY "lms_mod_staff_own" ON public.lms_modules
   USING (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (
-      SELECT id FROM public.lms_courses WHERE created_by = auth.uid()
-    )
+    AND lms_is_course_owner(course_id)
   )
   WITH CHECK (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (
-      SELECT id FROM public.lms_courses WHERE created_by = auth.uid()
-    )
+    AND lms_is_course_owner(course_id)
   );
 
 CREATE POLICY "lms_mod_student_enrolled" ON public.lms_modules
@@ -850,16 +941,12 @@ CREATE POLICY "lms_lesson_staff_own" ON public.lms_lessons
   USING (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (
-      SELECT id FROM public.lms_courses WHERE created_by = auth.uid()
-    )
+    AND lms_is_course_owner(course_id)
   )
   WITH CHECK (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (
-      SELECT id FROM public.lms_courses WHERE created_by = auth.uid()
-    )
+    AND lms_is_course_owner(course_id)
   );
 
 -- Students: see published lessons if enrolled, or is_preview = TRUE
@@ -929,9 +1016,7 @@ CREATE POLICY "lms_enroll_staff_read" ON public.lms_enrollments
   USING (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (
-      SELECT id FROM public.lms_courses WHERE created_by = auth.uid()
-    )
+    AND lms_is_course_owner(course_id)
   );
 
 CREATE POLICY "lms_enroll_student_own" ON public.lms_enrollments
@@ -952,7 +1037,7 @@ CREATE POLICY "lms_lp_staff_read" ON public.lms_lesson_progress
   USING (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (SELECT id FROM public.lms_courses WHERE created_by = auth.uid())
+    AND lms_is_course_owner(course_id)
   );
 
 CREATE POLICY "lms_lp_student_own" ON public.lms_lesson_progress
@@ -971,7 +1056,7 @@ CREATE POLICY "lms_cp_staff_read" ON public.lms_course_progress
   USING (
     institute_id = get_my_institute_id()
     AND get_my_role() = 'staff'
-    AND course_id IN (SELECT id FROM public.lms_courses WHERE created_by = auth.uid())
+    AND lms_is_course_owner(course_id)
   );
 
 CREATE POLICY "lms_cp_student_own" ON public.lms_course_progress

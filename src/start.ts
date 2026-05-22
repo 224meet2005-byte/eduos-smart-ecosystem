@@ -1,6 +1,7 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
+import ensureStorageBuckets from "./lib/storage-init";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -20,3 +21,9 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 export const startInstance = createStart(() => ({
   requestMiddleware: [errorMiddleware],
 }));
+
+// Initialize storage buckets on server start (non-blocking)
+ensureStorageBuckets().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error("Storage initialization failed:", err);
+});

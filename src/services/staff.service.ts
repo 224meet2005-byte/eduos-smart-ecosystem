@@ -21,12 +21,15 @@ import { generateStaffCredentials, generateTempPassword } from "@/utils/staffCre
 import { getErrorMessage } from "@/utils/helpers";
 import type {
   Staff,
+  Course,
   ApiResponse,
   AdmitStaffPayload,
   AdmitStaffResult,
+  UpdateStaffPayload,
   StaffAssignment,
   StaffBatchAssignment,
   StaffBatchOption,
+  StaffCourseAssignment,
 } from "@/types";
 
 // ── Shared "not configured" error response ───────────────────────────────────
@@ -39,6 +42,7 @@ const SUPABASE_NOT_CONFIGURED = {
 } as const;
 
 const STAFF_BATCH_CACHE_PREFIX = "staff-batches:";
+const STAFF_COURSE_CACHE_PREFIX = "staff-courses:";
 const UUID_V4_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -50,8 +54,125 @@ function cacheKeyForStaffBatchAssignments(staffId: string): string {
   return `${STAFF_BATCH_CACHE_PREFIX}${staffId}`;
 }
 
+function cacheKeyForStaffCourseAssignments(staffId: string): string {
+  return `${STAFF_COURSE_CACHE_PREFIX}${staffId}`;
+}
+
 export function invalidateStaffBatchAssignmentsCache(staffId?: string): void {
   invalidateQueryCache(staffId ? cacheKeyForStaffBatchAssignments(staffId) : STAFF_BATCH_CACHE_PREFIX);
+}
+
+export function invalidateStaffCourseAssignmentsCache(staffId?: string): void {
+  invalidateQueryCache(staffId ? cacheKeyForStaffCourseAssignments(staffId) : STAFF_COURSE_CACHE_PREFIX);
+}
+
+const STAFF_DETAIL_SELECT = `
+  id, institute_id, user_id, designation, department, qualification, joining_date,
+  is_active, created_at, updated_at,
+  user:users(id, name, email, avatar_url, phone),
+  assignments:staff_assignments(
+    id, institute_id, staff_id, batch_id, course_name, subject_name, assigned_at, assigned_by,
+    batch:batches(id, name, academic_year, course_name)
+  ),
+  assigned_courses:staff_courses(
+    id, institute_id, staff_id, course_id, assigned_at, assigned_by,
+    course:courses(id, name, code, is_active, created_at, updated_at)
+  )
+`;
+
+async function syncStaffCourseAssignments(
+  staffId: string,
+  instituteId: string,
+  assignedCourseIds: string[] = [],
+): Promise<ApiResponse<StaffCourseAssignment[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const uniqueCourseIds = Array.from(new Set(assignedCourseIds.filter(Boolean)));
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("staff_courses")
+    .select("id, course_id")
+    .eq("staff_id", staffId)
+    .eq("institute_id", instituteId);
+
+  if (existingError) {
+    return { data: null, error: existingError.message, success: false };
+  }
+
+  const existingCourseIds = new Set((existingRows ?? []).map((row) => row.course_id as string));
+  const desiredCourseIds = new Set(uniqueCourseIds);
+  const courseIdsToAdd = uniqueCourseIds.filter((courseId) => !existingCourseIds.has(courseId));
+  const courseIdsToRemove = (existingRows ?? [])
+    .map((row) => row.course_id as string)
+    .filter((courseId) => !desiredCourseIds.has(courseId));
+
+  if (courseIdsToAdd.length > 0) {
+    const { data: validCourses, error: courseError } = await supabase
+      .from("courses")
+      .select("id")
+      .eq("institute_id", instituteId)
+      .eq("is_active", true)
+      .in("id", courseIdsToAdd);
+
+    if (courseError) {
+      return { data: null, error: courseError.message, success: false };
+    }
+
+    const validCourseIds = new Set((validCourses ?? []).map((course) => course.id));
+    if (validCourseIds.size !== courseIdsToAdd.length) {
+      return {
+        data: null,
+        error: "One or more selected courses are no longer available.",
+        success: false,
+      };
+    }
+
+    const { error: insertError } = await supabase.from("staff_courses").insert(
+      courseIdsToAdd.map((courseId) => ({
+        institute_id: instituteId,
+        staff_id: staffId,
+        course_id: courseId,
+      })),
+    );
+
+    if (insertError) {
+      const message = getErrorMessage(insertError);
+      if (/duplicate key|unique/i.test(message)) {
+        return { data: null, error: "One or more courses are already assigned to this staff member.", success: false };
+      }
+      return { data: null, error: message, success: false };
+    }
+  }
+
+  if (courseIdsToRemove.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("staff_courses")
+      .delete()
+      .eq("staff_id", staffId)
+      .eq("institute_id", instituteId)
+      .in("course_id", courseIdsToRemove);
+
+    if (deleteError) {
+      return { data: null, error: deleteError.message, success: false };
+    }
+  }
+
+  invalidateStaffCourseAssignmentsCache(staffId);
+
+  const { data: finalRows, error: finalError } = await supabase
+    .from("staff_courses")
+    .select(
+      "id, institute_id, staff_id, course_id, assigned_at, assigned_by, course:courses(id, name, code, is_active, created_at, updated_at)",
+    )
+    .eq("staff_id", staffId)
+    .eq("institute_id", instituteId)
+    .order("assigned_at", { ascending: false });
+
+  if (finalError) {
+    return { data: null, error: finalError.message, success: false };
+  }
+
+  return { data: (finalRows ?? []) as StaffCourseAssignment[], error: null, success: true };
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -65,7 +186,7 @@ export async function getStaffByInstitute(instituteId: string): Promise<ApiRespo
 
   const { data, error } = await supabase
     .from("staff")
-    .select("id, institute_id, user_id, designation, department, qualification, joining_date, is_active, created_at, updated_at, user:users(id, name, email, avatar_url)")
+    .select(STAFF_DETAIL_SELECT)
     .eq("institute_id", instituteId)
     .order("created_at", { ascending: false });
 
@@ -82,7 +203,7 @@ export async function getStaffByUserId(userId: string): Promise<ApiResponse<Staf
 
   const { data, error } = await supabase
     .from("staff")
-    .select("*, user:users(*)")
+    .select(STAFF_DETAIL_SELECT)
     .eq("user_id", userId)
     .single();
 
@@ -205,6 +326,20 @@ export async function admitStaff(
     await supabase.from("staff_assignments").insert(assignmentRows);
   }
 
+  const courseSyncResult = await syncStaffCourseAssignments(
+    result.staff_id,
+    payload.institute_id,
+    payload.assigned_course_ids ?? [],
+  );
+
+  if (!courseSyncResult.success) {
+    return {
+      data: null,
+      error: courseSyncResult.error ?? "Failed to save assigned courses.",
+      success: false,
+    };
+  }
+
   return {
     data: {
       staff_id: result.staff_id,
@@ -213,6 +348,7 @@ export async function admitStaff(
       temporary_password: isExistingUser ? "REUSED_EXISTING_ACCOUNT" : temporaryPassword,
       name: payload.name,
       role_name: payload.role_name,
+      assigned_course_ids: payload.assigned_course_ids ?? [],
       assignments: payload.assignments,
     },
     error: null,
@@ -423,18 +559,67 @@ export async function createStaff(
  */
 export async function updateStaff(
   id: string,
-  payload: Partial<Pick<Staff, "designation" | "department">>,
+  payload: UpdateStaffPayload,
 ): Promise<ApiResponse<Staff>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
+  const { assigned_course_ids, fullName, email, phone, ...staffPayload } = payload;
+
+  const { data: existingStaff, error: staffLookupError } = await supabase
+    .from("staff")
+    .select("id, user_id, institute_id")
+    .eq("id", id)
+    .single();
+
+  if (staffLookupError || !existingStaff) {
+    return { data: null, error: staffLookupError?.message ?? "Staff record not found.", success: false };
+  }
+
+  const authUpdate = await supabaseAdmin.auth.admin.updateUserById(existingStaff.user_id, {
+    email,
+    user_metadata: { name: fullName },
+  });
+
+  if (authUpdate.error) {
+    return { data: null, error: authUpdate.error.message, success: false };
+  }
+
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({ name: fullName, email, phone })
+    .eq("id", existingStaff.user_id);
+
+  if (userUpdateError) {
+    return { data: null, error: userUpdateError.message, success: false };
+  }
+
   const { data, error } = await supabase
     .from("staff")
-    .update(payload)
+    .update(staffPayload)
     .eq("id", id)
-    .select()
+    .select(STAFF_DETAIL_SELECT)
     .single();
 
   if (error) return { data: null, error: error.message, success: false };
+
+  if (assigned_course_ids) {
+    const syncResult = await syncStaffCourseAssignments(
+      id,
+      existingStaff.institute_id,
+      assigned_course_ids,
+    );
+
+    if (!syncResult.success) {
+      return {
+        data: null,
+        error: syncResult.error ?? "Failed to update assigned courses.",
+        success: false,
+      };
+    }
+
+    (data as Staff).assigned_courses = syncResult.data ?? [];
+  }
+
   return { data: data as Staff, error: null, success: true };
 }
 

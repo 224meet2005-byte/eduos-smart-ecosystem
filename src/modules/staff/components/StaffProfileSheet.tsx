@@ -469,6 +469,29 @@ export function StaffProfileSheet({
             )}
           </div>
 
+          <SectionLabel>Assigned Courses</SectionLabel>
+          <div className="px-5 py-4">
+            {staff.assigned_courses?.length ? (
+              <div className="space-y-2">
+                {staff.assigned_courses.map((assignment) => (
+                  <div key={assignment.id} className="rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <BookOpen className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-sm font-semibold text-foreground">
+                        {assignment.course?.name ?? "Unknown course"}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-5.5">
+                      {assignment.course?.code ?? "No code"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No assigned courses yet</p>
+            )}
+          </div>
+
           <SectionLabel>Batch Assignments</SectionLabel>
           <div className="px-5 py-4 space-y-3">
             {canManageBatchAssignments && (
