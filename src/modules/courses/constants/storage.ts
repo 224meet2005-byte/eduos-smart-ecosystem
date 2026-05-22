@@ -5,8 +5,8 @@
 
 export const LMS_STORAGE_BUCKETS = {
   videos: "lms-course-videos",
-  materials: "lms-lesson-materials",
-  thumbnails: "lms-course-thumbnails",
+  materials: "lms-course-materials",
+  thumbnails: "lms-thumbnails",
   assignment_resources: "assignment-resources",
   assignment_submissions: "assignment-submissions",
 } as const;

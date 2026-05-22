@@ -40,6 +40,7 @@ function StaffDashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
   const firstName = user?.name?.split(" ")[0] ?? "there";
+  const assignedCourses = staffRecord?.assigned_courses ?? [];
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -94,12 +95,18 @@ function StaffDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard
           label="Assigned Batches"
           value={batchAssignments.length}
           icon={<BookOpen className="h-5 w-5 text-blue-600" />}
           color="bg-blue-50 dark:bg-blue-950"
+        />
+        <StatCard
+          label="Assigned Courses"
+          value={assignedCourses.length}
+          icon={<BookOpen className="h-5 w-5 text-emerald-600" />}
+          color="bg-emerald-50 dark:bg-emerald-950"
         />
         <StatCard
           label="Total Students"
@@ -166,6 +173,24 @@ function StaffDashboard() {
                       className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground"
                     >
                       {assignment.batch?.name ?? "Unknown batch"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {assignedCourses.length > 0 && (
+              <div className="border-t border-border px-6 py-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Assigned courses
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {assignedCourses.map((assignment) => (
+                    <span
+                      key={assignment.id}
+                      className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground"
+                    >
+                      {assignment.course?.name ?? "Unknown course"}
                     </span>
                   ))}
                 </div>

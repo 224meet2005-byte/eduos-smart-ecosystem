@@ -155,6 +155,7 @@ export interface Staff {
   // Joined relations
   user?: User;
   assignments?: StaffAssignment[];
+  assigned_courses?: StaffCourseAssignment[];
 }
 
 export interface StaffRole {
@@ -188,6 +189,16 @@ export interface StaffBatchAssignment {
   batch?: Batch;
 }
 
+export interface StaffCourseAssignment {
+  id: string;
+  institute_id: string;
+  staff_id: string;
+  course_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  course?: Course;
+}
+
 export interface StaffBatchOption {
   id: string;
   name: string;
@@ -206,6 +217,7 @@ export interface AdmitStaffPayload {
   qualification: string;
   joining_date: string;
   role_name: string;
+  assigned_course_ids?: string[];
   assignments?: {
     batch_id?: string;
     course_name?: string;
@@ -220,11 +232,24 @@ export interface AdmitStaffResult {
   temporary_password: string;
   name: string;
   role_name: string;
+  assigned_course_ids?: string[];
   assignments?: {
     batch_id?: string;
     course_name?: string;
     subject_name?: string;
   }[];
+}
+
+export interface UpdateStaffPayload {
+  fullName: string;
+  email: string;
+  phone: string;
+  designation: string;
+  department: string;
+  qualification: string;
+  joining_date: string;
+  is_active?: boolean;
+  assigned_course_ids?: string[];
 }
 
 /** Row in the `staff_assignments` table. */
@@ -250,6 +275,16 @@ export interface StaffBatchAssignment extends StaffAssignment {
   batch?: Batch;
 }
 
+export interface StaffCourseAssignment {
+  id: string;
+  institute_id: string;
+  staff_id: string;
+  course_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  course?: Course;
+}
+
 /** Batch option used by the staff management UI. */
 export type StaffBatchOption = Batch;
 
@@ -264,6 +299,7 @@ export interface AdmitStaffPayload {
   qualification: string;
   joining_date: string;
   role_name: string;
+  assigned_course_ids?: string[];
   assignments?: Array<{
     batch_id?: string;
     course_name?: string;
@@ -278,6 +314,7 @@ export interface AdmitStaffResult {
   email: string;
   temporary_password: string;
   role_name: string;
+  assigned_course_ids?: string[];
   assignments?: Array<{
     batch_id?: string;
     course_name?: string;
@@ -1052,7 +1089,7 @@ export interface LmsCourse {
   institute_id: string;
   created_by: string;
   category_id: string | null;
-
+  course_id?: string | null; // Link to academic course
   title: string;
   subtitle: string | null;
   description: string | null;

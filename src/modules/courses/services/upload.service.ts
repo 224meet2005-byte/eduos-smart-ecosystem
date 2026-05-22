@@ -60,13 +60,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-function formatStorageError(error: { message: string; statusCode?: string }): string {
-  const msg = error.message ?? "Upload failed";
-  if (msg.includes("row-level security") || msg.includes("403")) {
-    return "Storage permission denied. Ensure you are signed in and the LMS storage buckets exist.";
+function formatStorageError(
+  error: { message: string; statusCode?: string } | null | undefined,
+  bucket?: string,
+): string {
+  const msg = (error && error.message) || "Upload failed";
+  // Log detailed error server-side for debugging (doesn't leak keys)
+  try {
+    // eslint-disable-next-line no-console
+    console.error("Storage error for bucket:", bucket, "message:", msg, "raw:", error);
+  } catch (_e) {
+    // ignore logging failures
   }
-  if (msg.includes("Bucket not found") || msg.includes("bucket")) {
-    return "Storage bucket not found. Run Supabase migrations (011 and 014) to create LMS buckets.";
+
+  if (msg.includes("row-level security") || msg.includes("403")) {
+    return `Storage permission denied for bucket '${bucket ?? "unknown"}'. Ensure you are signed in and policies allow this operation.`;
+  }
+  if (msg.includes("Bucket not found") || (msg.toLowerCase && msg.toLowerCase().includes("bucket"))) {
+    return `Storage bucket not found: '${bucket ?? "unknown"}'. Run Supabase migrations (011 and 014) or create the bucket.`;
   }
   if (msg.includes("mime") || msg.includes("MIME")) {
     return `File type not allowed: ${msg}`;
@@ -135,7 +146,7 @@ async function uploadWithProgress(
 
     if (error) {
       onProgress?.(0);
-      return { data: null, error: formatStorageError(error), success: false };
+      return { data: null, error: formatStorageError(error, bucket), success: false };
     }
 
     onProgress?.(100);

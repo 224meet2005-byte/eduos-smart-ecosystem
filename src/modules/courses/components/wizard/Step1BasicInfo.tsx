@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo, useRef, type KeyboardEvent, type ReactNod
 import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2, X, Plus, BookOpen, Globe, Clock, Tag } from "lucide-react";
+import { Loader2, X, Plus, BookOpen, Globe, Clock, Tag, School } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,9 @@ import {
   createCourseSchema,
   type CreateCourseSchema,
 } from "@/modules/courses/validations/course.schema";
-import type { CreateCoursePayload, LmsCategory } from "@/types";
+import type { CreateCoursePayload, LmsCategory, Course } from "@/types";
+import { getCoursesByInstitute } from "@/services/course.service";
+import { useAuthStore } from "@/store/authStore";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -250,12 +252,28 @@ export function Step1BasicInfo({
   categories,
   onDraftChange,
 }: Step1Props) {
+  const { user } = useAuthStore();
+  const instituteId = user?.institute_id;
+  const [academicCourses, setAcademicCourses] = useState<Course[]>([]);
+  const [isLoadingAcademic, setIsLoadingAcademic] = useState(false);
+
+  useEffect(() => {
+    if (!instituteId) return;
+    setIsLoadingAcademic(true);
+    getCoursesByInstitute(instituteId)
+      .then((res) => {
+        if (res.success) setAcademicCourses(res.data ?? []);
+      })
+      .finally(() => setIsLoadingAcademic(false));
+  }, [instituteId]);
+
   const normalizedDefaults = useMemo(
     () => ({
       title: defaultValues?.title ?? "",
       subtitle: defaultValues?.subtitle ?? "",
       description: defaultValues?.description ?? "",
       category_id: defaultValues?.category_id ? String(defaultValues.category_id) : "",
+      course_id: defaultValues?.course_id ? String(defaultValues.course_id) : "",
       difficulty: defaultValues?.difficulty ?? "beginner",
       language: defaultValues?.language ?? "english",
       estimated_duration_mins: defaultValues?.estimated_duration_mins ?? 0,
@@ -398,6 +416,52 @@ export function Step1BasicInfo({
                           />
                           {cat.name}
                         </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+
+          {/* Academic Course Link */}
+          <Field
+            label="Linked Academic Course"
+            description="Link this content to a course from your institute's catalog"
+            error={errors.course_id?.message}
+          >
+            <Controller
+              name="course_id"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  value={field.value || "none"}
+                  onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                  disabled={isLoadingAcademic}
+                >
+                  <SelectTrigger className={cn(errors.course_id && "border-destructive")}>
+                    {isLoadingAcademic ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span>Loading...</span>
+                      </div>
+                    ) : (
+                      <SelectValue placeholder="Select academic course" />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not linked</SelectItem>
+                    {academicCourses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        <div className="flex items-center gap-2">
+                          <School className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{course.name}</span>
+                          {course.code && (
+                            <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 rounded">
+                              {course.code}
+                            </span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

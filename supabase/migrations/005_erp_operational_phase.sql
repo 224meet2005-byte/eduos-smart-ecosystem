@@ -756,9 +756,8 @@ CREATE POLICY "admin_institute_security_events"
 --   • NNNNN   — 5-digit zero-padded sequential counter per institute
 --
 -- Concurrency note:
---   COUNT(*) + 1 is safe for typical school/coaching-institute volumes.
---   For very high concurrency (> a few hundred payments/second) replace with
---   a per-institute SEQUENCE stored in a dedicated table.
+--   Uses an advisory transaction lock per institute so two payments cannot
+--   generate the same receipt number concurrently.
 
 CREATE OR REPLACE FUNCTION public.generate_receipt_number(p_institute_id UUID)
 RETURNS TEXT
@@ -769,12 +768,30 @@ AS $$
 DECLARE
   v_count      INTEGER;
   v_receipt_no TEXT;
+  v_month_key  TEXT;
 BEGIN
-  SELECT COUNT(*) + 1 INTO v_count
-  FROM public.fee_payments
-  WHERE institute_id = p_institute_id;
+  -- Serialize receipt generation per institute for the duration of the txn.
+  PERFORM pg_advisory_xact_lock(hashtext(p_institute_id::TEXT));
 
-  v_receipt_no := 'RCP-' || to_char(NOW(), 'YYYYMM') || '-' || lpad(v_count::text, 5, '0');
+  v_month_key := to_char(NOW(), 'YYYYMM');
+
+  SELECT COALESCE(
+           MAX(
+             (
+               regexp_match(
+                 receipt_number,
+                 '^RCP-' || v_month_key || '-([0-9]{5})$'
+               )
+             )[1]::INTEGER
+           ),
+           0
+         ) + 1
+  INTO v_count
+  FROM public.fee_payments
+  WHERE institute_id = p_institute_id
+    AND receipt_number LIKE 'RCP-' || v_month_key || '-%';
+
+  v_receipt_no := 'RCP-' || v_month_key || '-' || lpad(v_count::text, 5, '0');
   RETURN v_receipt_no;
 END;
 $$;

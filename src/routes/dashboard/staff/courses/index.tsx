@@ -90,12 +90,11 @@ function StaffCoursesPage() {
   const [difficultyFilter, setDifficultyFilter] = useState<LmsDifficulty | "all">("all");
   const [page, setPage] = useState(1);
 
-  // Staff always sees only their own courses
+  // Staff see courses they created or are assigned to (handled by RLS)
   const filters: CourseFilters = {
     search: search || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
     difficulty: difficultyFilter !== "all" ? difficultyFilter : undefined,
-    created_by: staffId,
     page,
     pageSize: 12,
   };
@@ -105,7 +104,7 @@ function StaffCoursesPage() {
 
   // ── Data hooks ───────────────────────────────────────────────────────────
   const { data, isLoading, isFetching } = useCourses(filters);
-  const { data: stats } = useCourseStats(staffId);
+  const { data: stats } = useCourseStats(); // Removed created_by filter
 
   const { mutate: publishCourse, isPending: publishing } = usePublishCourse();
   const { mutate: archiveCourse, isPending: archiving } = useArchiveCourse();

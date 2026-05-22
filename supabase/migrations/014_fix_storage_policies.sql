@@ -1,6 +1,7 @@
 -- Fix for storage policies to allow upsert (SELECT and UPDATE)
 
 -- VIDEOS
+DROP POLICY IF EXISTS "lms_video_update" ON storage.objects;
 CREATE POLICY "lms_video_update" ON storage.objects
   FOR UPDATE TO authenticated
   USING (
@@ -10,6 +11,7 @@ CREATE POLICY "lms_video_update" ON storage.objects
   );
 
 -- MATERIALS
+DROP POLICY IF EXISTS "lms_mat_update" ON storage.objects;
 CREATE POLICY "lms_mat_update" ON storage.objects
   FOR UPDATE TO authenticated
   USING (
@@ -19,6 +21,7 @@ CREATE POLICY "lms_mat_update" ON storage.objects
   );
 
 -- THUMBNAILS
+DROP POLICY IF EXISTS "lms_thumb_update" ON storage.objects;
 CREATE POLICY "lms_thumb_update" ON storage.objects
   FOR UPDATE TO authenticated
   USING (
@@ -27,6 +30,7 @@ CREATE POLICY "lms_thumb_update" ON storage.objects
     AND lms_is_instructor()
   );
 
+DROP POLICY IF EXISTS "lms_thumb_read" ON storage.objects;
 CREATE POLICY "lms_thumb_read" ON storage.objects
   FOR SELECT TO authenticated
   USING (
@@ -35,6 +39,7 @@ CREATE POLICY "lms_thumb_read" ON storage.objects
   );
 
 -- SUBMISSIONS
+DROP POLICY IF EXISTS "lms_asub_update" ON storage.objects;
 CREATE POLICY "lms_asub_update" ON storage.objects
   FOR UPDATE TO authenticated
   USING (

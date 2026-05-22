@@ -97,6 +97,7 @@ function mapCourseToCreatePayload(course: LmsCourse): Partial<CreateCoursePayloa
     subtitle: course.subtitle ?? "",
     description: course.description ?? "",
     category_id: course.category_id ?? "",
+    course_id: course.course_id ?? "",
     difficulty: course.difficulty,
     language: course.language,
     estimated_duration_mins: course.estimated_duration_mins ?? 0,

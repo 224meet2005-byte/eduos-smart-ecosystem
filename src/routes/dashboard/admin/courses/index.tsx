@@ -103,8 +103,8 @@ function AdminCoursesPage() {
     search: search || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
     difficulty: difficultyFilter !== "all" ? difficultyFilter : undefined,
-    // Staff see only their own courses; admins see all
-    created_by: isStaff ? (user?.id ?? undefined) : undefined,
+    // Staff see courses they created or are assigned to (handled by RLS)
+    // We no longer pass created_by for staff to allow seeing assigned courses
     page,
     pageSize: 12,
   };
@@ -115,7 +115,7 @@ function AdminCoursesPage() {
 
   // ── Data hooks ───────────────────────────────────────────────────────────
   const { data, isLoading, isFetching } = useCourses(filters);
-  const { data: stats } = useCourseStats(isStaff ? (user?.id ?? undefined) : undefined);
+  const { data: stats } = useCourseStats(); // Removed isStaff ? user.id filter
 
   const { mutate: publishCourse, isPending: publishing } = usePublishCourse();
   const { mutate: archiveCourse, isPending: archiving } = useArchiveCourse();
