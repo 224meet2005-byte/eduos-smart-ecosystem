@@ -68,6 +68,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           // Use the more specific staff icon (UserCheck) but keep courses added by remote.
           { title: "Staff", url: "/dashboard/admin/staff", icon: UserCheck },
           { title: "Courses", url: "/dashboard/admin/courses", icon: BookOpen },
+          { title: "MCQ Tests", url: "/dashboard/admin/exams", icon: FileText },
           { title: "Assignments", url: "/dashboard/admin/assignments", icon: FileText },
           { title: "Schedule", url: "/dashboard/admin/schedule", icon: Calendar },
         ],
@@ -125,6 +126,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         label: "Operations",
         items: [
           { title: "Attendance", url: "/dashboard/admin/attendance", icon: Calendar },
+          { title: "MCQ Tests", url: "/dashboard/admin/exams", icon: FileText },
           { title: "Assignments", url: "/dashboard/admin/assignments", icon: FileText },
           { title: "Progress Tracker", url: "/dashboard/admin/study-logs", icon: LayoutDashboard },
         ],
@@ -139,6 +141,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         items: [
           { title: "Dashboard", url: "/dashboard/student", icon: LayoutDashboard },
           { title: "My Learning", url: "/dashboard/student/my-learning", icon: BookOpen },
+          { title: "MCQ Tests", url: "/dashboard/student/exams", icon: FileText },
           { title: "Assignments", url: "/dashboard/student/assignments", icon: FileText },
           { title: "Browse Courses", url: "/dashboard/student/courses", icon: GraduationCap },
           {
