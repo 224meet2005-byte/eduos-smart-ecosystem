@@ -34,7 +34,7 @@
 //
 // ---------------------------------------------------------------------------
 
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
 import type { ApiResponse } from "@/types";
 
 // ── Parameter type ───────────────────────────────────────────────────────────
@@ -77,15 +77,46 @@ interface RegisterInstituteRpcResult {
   already_exists: boolean;
 }
 
+interface SupabaseAuthUserSummary {
+  id: string;
+  email?: string | null;
+}
+
+async function findAuthUserIdByEmail(email: string): Promise<string | null> {
+  if (!supabaseAdmin) return null;
+
+  const targetEmail = email.trim().toLowerCase();
+  let page = 1;
+  const perPage = 1000;
+
+  while (page <= 10) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+
+    if (error || !data?.users?.length) {
+      return null;
+    }
+
+    const match = data.users.find(
+      (user: SupabaseAuthUserSummary) => user.email?.trim().toLowerCase() === targetEmail,
+    );
+
+    if (match) return match.id;
+
+    if (data.users.length < perPage) return null;
+    page += 1;
+  }
+
+  return null;
+}
+
 // ── Service function ─────────────────────────────────────────────────────────
 
 /**
  * Registers a new institute and provisions its first admin account.
  *
  * Two-step flow:
- *  1. `supabase.auth.signUp` — creates the Supabase Auth identity.
- *     The on_auth_user_created trigger is intentionally a no-op here
- *     because no institute_id is passed in metadata.
+ *  1. `supabaseAdmin.auth.admin.createUser` — creates the Supabase Auth
+ *     identity directly, avoiding browser sign-up placeholder responses.
  *  2. `supabase.rpc('register_institute')` — single atomic DB transaction
  *     that validates the auth user, creates the institute row, and creates
  *     the admin profile row. Runs as SECURITY DEFINER, bypasses RLS.
@@ -111,32 +142,67 @@ export async function registerInstitute(
 
   // ── Step 1: Create the Supabase Auth user ──────────────────────────────────
   //
-  // IMPORTANT: Do NOT pass institute_id or role in the metadata here.
-  // The on_auth_user_created trigger now skips the users INSERT when
-  // institute_id is absent, preventing the NOT NULL constraint failure.
-  // The RPC (Step 2) is the single source of truth for profile creation.
+  // Prefer the admin API when available so new registrations do not depend on
+  // browser-side confirmation/session state.
+  const authClient = supabaseAdmin?.auth.admin ? supabaseAdmin.auth.admin : null;
 
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        // Only pass display name — NOT institute_id or role.
-        // Role assignment is handled by the SECURITY DEFINER RPC.
-        name: adminName,
-      },
-    },
-  });
-
-  if (authError) {
+  if (!authClient) {
     return {
       data: null,
-      error: authError.message,
+      error:
+        "Supabase admin credentials are not configured. Add the service role key to the server environment, then restart the app.",
       success: false,
     };
   }
 
-  if (!authData.user) {
+  let userId = await findAuthUserIdByEmail(email);
+
+  if (!userId) {
+    const { data: authData, error: authError } = await authClient.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name: adminName,
+        role: "admin",
+      },
+    });
+
+    if (authError) {
+      const alreadyRegistered = authError.message.toLowerCase().includes("already registered");
+      if (alreadyRegistered) {
+        userId = await findAuthUserIdByEmail(email);
+      }
+
+      if (!userId) {
+        return {
+          data: null,
+          error: authError.message,
+          success: false,
+        };
+      }
+    } else if (authData.user) {
+      userId = authData.user.id;
+    }
+  } else {
+    const { error: passwordUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password,
+      user_metadata: {
+        name: adminName,
+        role: "admin",
+      },
+    });
+
+    if (passwordUpdateError) {
+      return {
+        data: null,
+        error: passwordUpdateError.message,
+        success: false,
+      };
+    }
+  }
+
+  if (!userId) {
     return {
       data: null,
       error: "Sign-up succeeded but no user was returned. Please try again.",
@@ -144,12 +210,9 @@ export async function registerInstitute(
     };
   }
 
-  const userId = authData.user.id;
-
-  // Detect whether email confirmation is required.
-  // When enabled, signUp() returns `session: null` — the user must verify
-  // their email before their JWT is issued.
-  const requiresEmailConfirmation = !authData.session;
+  // Admin-created users are confirmed immediately so the dashboard can open
+  // without waiting for a browser auth session or email link.
+  const requiresEmailConfirmation = false;
 
   // ── Step 2: Atomic institute + profile creation via SECURITY DEFINER RPC ──
   //
@@ -207,11 +270,17 @@ export async function registerInstitute(
  * to user-friendly strings. Falls back to the raw message for unknown errors.
  */
 function mapRpcError(raw: string): string {
+  if (raw.includes("REGISTRATION_EMAIL_ALREADY_REGISTERED")) {
+    return "An account with this email already exists. Please sign in or reset your password.";
+  }
   if (raw.includes("REGISTRATION_INVALID_USER")) {
     return "Registration session is invalid. Please refresh the page and try again.";
   }
   if (raw.includes("REGISTRATION_SESSION_EXPIRED")) {
-    return "Your registration window has expired. Please start again.";
+    return "Your registration could not be completed with this email. If you already tried signing up before, use Login or Password Reset, or retry registration with a different email.";
+  }
+  if (raw.includes("REGISTRATION_INVALID_USER_EMAIL")) {
+    return "Registration identity mismatch detected. Please refresh the page and try again.";
   }
   if (raw.includes("duplicate key") && raw.includes("users_email_key")) {
     return "An account with this email already exists. Please sign in instead.";
