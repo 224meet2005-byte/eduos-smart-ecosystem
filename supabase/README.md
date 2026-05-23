@@ -30,9 +30,12 @@ If you see `violation_type is of type violation_type but expression is of type t
 
 (052 includes this fix on fresh runs; 053 is for databases that already ran 052.)
 
-If you see `test_violations_attempt_id_fkey` violated, run:
+If you see `test_violations_attempt_id_fkey` violated, run in order:
 
-`migrations/054_fix_test_violations_attempt_fk.sql`
+1. `migrations/053_exam_violation_type_text.sql`
+2. `migrations/054_fix_test_violations_attempt_fk.sql`
+
+The app also falls back to `exam_violations` if the RPC schema is still wrong (after you redeploy).
 
 ## Row Level Security
 

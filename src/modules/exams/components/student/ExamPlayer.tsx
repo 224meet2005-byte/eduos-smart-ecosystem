@@ -110,8 +110,15 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
 
       if (examRes.success && examRes.data) {
         setExam(examRes.data);
-        
-        if (attemptRes.success && attemptRes.data) {
+
+        if (!attemptRes.success || !attemptRes.data) {
+          toast.error(attemptRes.error || "Failed to start exam attempt. Please try again.");
+          navigate({ to: "/dashboard/student/exams" });
+          setIsLoading(false);
+          return;
+        }
+
+        {
           const newAttempt = attemptRes.data;
           setAttempt(newAttempt);
           

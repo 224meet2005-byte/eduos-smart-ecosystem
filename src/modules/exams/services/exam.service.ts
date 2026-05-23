@@ -302,13 +302,20 @@ export async function startExamAttempt(
 
   if (!student) return { data: null, error: "Student profile not found", success: false };
 
-  // Check if attempt already exists
-  const { data: existingAttempt } = await supabase
+  // Check if attempt already exists (latest row if duplicates exist)
+  const { data: existingAttempts, error: existingError } = await supabase
     .from("exam_attempts")
     .select("*")
     .eq("exam_id", examId)
     .eq("student_id", student.id)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    return { data: null, error: getErrorMessage(existingError), success: false };
+  }
+
+  const existingAttempt = existingAttempts?.[0];
 
   if (existingAttempt) {
     if (existingAttempt.status === 'submitted' || existingAttempt.status === 'graded') {
@@ -803,6 +810,111 @@ export async function countActiveSessionsForAttempt(attemptId: string): Promise<
 }
 
 /**
+ * Client-side fallback when test_violations RPC/schema is misconfigured.
+ * Uses exam_violations + exam_attempts (always FK-aligned in 041).
+ */
+async function recordViolationWithCheckFallback(
+  attemptId: string,
+  violationType: string,
+  metadata?: any
+): Promise<ApiResponse<{
+  violationId: string;
+  totalViolations: number;
+  shouldAutoSubmit: boolean;
+  reason: string;
+}>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data: attemptRow, error: attemptError } = await supabase
+    .from("exam_attempts")
+    .select("id, status, is_locked, violation_count")
+    .eq("id", attemptId)
+    .maybeSingle();
+
+  if (attemptError || !attemptRow) {
+    return {
+      data: null,
+      error: attemptError ? getErrorMessage(attemptError) : "Exam attempt not found",
+      success: false,
+    };
+  }
+
+  if (attemptRow.status !== "in_progress" || attemptRow.is_locked) {
+    return {
+      data: {
+        violationId: "",
+        totalViolations: attemptRow.violation_count ?? 0,
+        shouldAutoSubmit: false,
+        reason: "Attempt is no longer active",
+      },
+      error: null,
+      success: true,
+    };
+  }
+
+  const { data: violation, error: insertError } = await supabase
+    .from("exam_violations")
+    .insert({
+      attempt_id: attemptId,
+      violation_type: violationType,
+      violation_data: metadata ?? {},
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return { data: null, error: getErrorMessage(insertError), success: false };
+  }
+
+  const nextCount = (attemptRow.violation_count ?? 0) + 1;
+  const shouldAutoSubmit = nextCount >= 3;
+
+  const { error: updateError } = await supabase
+    .from("exam_attempts")
+    .update({
+      violation_count: nextCount,
+      last_violation_at: new Date().toISOString(),
+      ...(shouldAutoSubmit
+        ? {
+            status: "submitted",
+            submitted_at: new Date().toISOString(),
+            is_locked: true,
+            auto_submit_reason: "Exceeded maximum proctoring violations",
+          }
+        : { auto_submit_reason: null }),
+    })
+    .eq("id", attemptId);
+
+  if (updateError) {
+    return { data: null, error: getErrorMessage(updateError), success: false };
+  }
+
+  return {
+    data: {
+      violationId: violation.id,
+      totalViolations: nextCount,
+      shouldAutoSubmit,
+      reason: shouldAutoSubmit
+        ? "Auto-submitted due to excessive violations"
+        : "Violation recorded",
+    },
+    error: null,
+    success: true,
+  };
+}
+
+function shouldUseViolationRpcFallback(errorMessage: string): boolean {
+  const msg = errorMessage.toLowerCase();
+  return (
+    msg.includes("test_violations") ||
+    msg.includes("violation_count") ||
+    msg.includes("violation_type") ||
+    msg.includes("foreign key") ||
+    msg.includes("does not exist")
+  );
+}
+
+/**
  * Record violation with automatic escalation
  * 3rd violation = auto-submit
  */
@@ -818,13 +930,19 @@ export async function recordViolationWithCheck(
 }>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
-  const { data, error } = await supabase.rpc('record_and_check_violations', {
+  const { data, error } = await supabase.rpc("record_and_check_violations", {
     p_attempt_id: attemptId,
     p_violation_type: violationType,
     p_metadata: metadata || {},
   });
 
-  if (error) return { data: null, error: getErrorMessage(error), success: false };
+  if (error) {
+    const message = getErrorMessage(error);
+    if (shouldUseViolationRpcFallback(message)) {
+      return recordViolationWithCheckFallback(attemptId, violationType, metadata);
+    }
+    return { data: null, error: message, success: false };
+  }
 
   if (!data || data.length === 0) {
     return { data: null, error: "Failed to record violation", success: false };

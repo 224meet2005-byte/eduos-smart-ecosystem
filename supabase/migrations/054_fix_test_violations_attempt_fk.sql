@@ -123,6 +123,9 @@ BEGIN
     RETURN QUERY
     SELECT v_violation_id, v_total_violations, FALSE, 'Violation recorded';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
+
+ALTER FUNCTION public.record_and_check_violations(UUID, TEXT, JSONB) SET search_path = public;
 
 GRANT EXECUTE ON FUNCTION public.record_and_check_violations TO authenticated;
