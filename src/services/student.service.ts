@@ -280,14 +280,32 @@ export async function getStudentByUserId(userId: string): Promise<ApiResponse<St
         assignments:student_batch_assignments(
           id, batch_id, course_id, is_active, 
           batch:batches(id, name),
-          course:lms_courses(id, title as name)
+          course:lms_courses(id, title, code, is_active, created_at, updated_at)
         )
       `)
       .eq("user_id", userId)
       .single();
 
     if (error) return { data: null, error: getErrorMessage(error), success: false };
-    return { data: data as Student, error: null, success: true };
+
+    const normalized = data
+      ? {
+          ...data,
+          assignments: data.assignments?.map((assignment) =>
+            assignment.course
+              ? {
+                  ...assignment,
+                  course: {
+                    ...assignment.course,
+                    name: assignment.course.title,
+                  },
+                }
+              : assignment,
+          ),
+        }
+      : data;
+
+    return { data: normalized as Student, error: null, success: true };
   } catch (err) {
     const msg = getErrorMessage(err, "Failed to load student profile.");
     console.error("[getStudentByUserId] exception:", err);

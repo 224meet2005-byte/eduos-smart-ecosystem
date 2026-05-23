@@ -60,12 +60,25 @@ async function getStudentCourses(studentId: string): Promise<ApiResponse<Student
 
   const { data, error } = await supabase
     .from("student_courses")
-    .select("id, student_id, course_id, institute_id, enrolled_at, status, course:lms_courses(id, institute_id, title as name, code, is_active, created_at, updated_at)")
+    .select("id, student_id, course_id, institute_id, enrolled_at, status, course:lms_courses(id, institute_id, title, code, is_active, created_at, updated_at)")
     .eq("student_id", studentId)
     .order("enrolled_at", { ascending: false });
 
   if (error) return { data: null, error: error.message, success: false };
-  return { data: data as StudentCourse[], error: null, success: true };
+
+  const normalized = (data ?? []).map((row) =>
+    row.course
+      ? {
+          ...row,
+          course: {
+            ...row.course,
+            name: row.course.title,
+          },
+        }
+      : row,
+  );
+
+  return { data: normalized as StudentCourse[], error: null, success: true };
 }
 
 export async function getParentChildSnapshot(studentId: string): Promise<ApiResponse<ParentPortalChildSnapshot>> {
