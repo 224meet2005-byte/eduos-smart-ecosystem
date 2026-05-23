@@ -16,13 +16,13 @@ import { useCourseStore } from "@/modules/courses/store/courseStore";
 import { useAllLessonProgress } from "@/modules/courses/hooks/useProgress";
 import { CoursePlayer } from "@/modules/courses/components/player/CoursePlayer";
 import {
-  getCourseWithCurriculum,
   getStudentEnrollment,
 } from "@/modules/courses/services/course.service";
 import { upsertLessonProgress } from "@/modules/courses/services/progress.service";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { enrollmentKeys } from "@/modules/courses/hooks/useEnrollment";
 import { progressKeys } from "@/modules/courses/hooks/useProgress";
+import { getStudentCourseCurriculum } from "@/modules/courses/services/student-curriculum.server";
 import type { LmsLessonProgress } from "@/types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -96,13 +96,20 @@ function LearnPage() {
   } = useQuery({
     queryKey: ["course-curriculum", courseId, instituteId],
     queryFn: async () => {
-      const res = await getCourseWithCurriculum(courseId, instituteId);
+      const res = await getStudentCourseCurriculum({
+        data: {
+          courseId,
+          enrollmentId: enrollment.id,
+          studentId,
+          instituteId,
+        },
+      });
       if (!res.success || !res.data) {
         throw new Error(res.error ?? "Course not found");
       }
       return res.data;
     },
-    enabled: !!courseId && !!instituteId,
+    enabled: !!courseId && !!instituteId && !!enrollment?.id,
     staleTime: 5 * 60 * 1000, // 5 min — curriculum rarely changes
   });
 

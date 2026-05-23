@@ -220,14 +220,40 @@ function mergeLessonsIntoModules(
     byModule.set(lesson.module_id, list);
   }
 
-  return modules.map((mod) => {
+  const matchedLessonIds = new Set<string>();
+
+  const mergedModules = modules.map((mod) => {
     const nested = (mod as any).lessons ?? [];
     const merged =
       nested.length > 0
         ? nested
         : (byModule.get(mod.id) ?? []).sort((a, b) => a.position - b.position);
+
+    merged.forEach((lesson) => matchedLessonIds.add(lesson.id));
+
     return { ...mod, lessons: merged };
   });
+
+  const orphanLessons = flatLessons
+    .filter((lesson) => !matchedLessonIds.has(lesson.id))
+    .sort((a, b) => a.position - b.position);
+
+  if (orphanLessons.length > 0) {
+    mergedModules.push({
+      id: `${modules[0]?.course_id ?? "course"}-fallback-module`,
+      course_id: modules[0]?.course_id ?? orphanLessons[0].course_id,
+      institute_id: modules[0]?.institute_id ?? orphanLessons[0].institute_id,
+      title: "Course Lessons",
+      description: null,
+      position: mergedModules.length + 1,
+      is_published: true,
+      created_at: orphanLessons[0].created_at,
+      updated_at: orphanLessons[0].updated_at,
+      lessons: orphanLessons,
+    });
+  }
+
+  return mergedModules;
 }
 
 export async function getCourseWithCurriculum(
