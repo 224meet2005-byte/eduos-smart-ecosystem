@@ -17,6 +17,8 @@ import type { AttendanceStatus, StudentAttendanceRecord } from "@/types";
 import { AlertCircle, RefreshCw, Sparkles } from "lucide-react";
 import { StudentLearningSection } from "@/modules/courses/components/student/StudentLearningSection";
 
+const STUDENT_DASHBOARD_TIMEOUT_MS = 15_000;
+
 export const Route = createFileRoute("/dashboard/student/")({
   head: () => ({ meta: [{ title: "Student Dashboard — EduOS" }] }),
   component: StudentDashboard,
@@ -59,18 +61,31 @@ function StudentDashboard() {
       setLoading(true);
       setWarning(null);
 
-      const response = await getCurrentStudentDashboard(userId, instituteId);
-      if (cancelled) return;
+      try {
+        const response = await Promise.race([
+          getCurrentStudentDashboard(userId, instituteId),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Student dashboard load timed out.")), STUDENT_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
 
-      if (response.success && response.data) {
-        setDashboard(userId, response.data);
-        setWarning(response.error);
-        setError(null);
-      } else {
-        setError(response.error ?? "Failed to load the student dashboard.");
+        if (cancelled) return;
+
+        if (response.success && response.data) {
+          setDashboard(userId, response.data);
+          setWarning(response.error);
+          setError(null);
+        } else {
+          setError(response.error ?? "Failed to load the student dashboard.");
+        }
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(loadError instanceof Error ? loadError.message : "Failed to load the student dashboard.");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setLoading(false);
     }
 
     loadDashboard().catch((loadError) => {
@@ -134,7 +149,12 @@ function StudentDashboard() {
 
     setLoading(true);
     setWarning(null);
-    void getCurrentStudentDashboard(user.id, user.institute_id)
+    void Promise.race([
+      getCurrentStudentDashboard(user.id, user.institute_id),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Student dashboard refresh timed out.")), STUDENT_DASHBOARD_TIMEOUT_MS);
+      }),
+    ])
       .then((response) => {
         if (response.success && response.data) {
           setDashboard(user.id, response.data);
@@ -143,6 +163,11 @@ function StudentDashboard() {
         } else {
           setError(response.error ?? "Failed to refresh the student dashboard.");
         }
+      })
+      .catch((refreshError) => {
+        setError(
+          refreshError instanceof Error ? refreshError.message : "Failed to refresh the student dashboard.",
+        );
       })
       .finally(() => setLoading(false));
   };

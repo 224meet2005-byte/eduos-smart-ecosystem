@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuthStore } from "@/store/authStore";
 import { getStaffByUserId, getStaffAssignments, getStaffBatchAssignments } from "@/services/staff.service";
@@ -11,12 +11,24 @@ import type { Schedule } from "@/types";
 import { BookOpen, Users, Calendar, ArrowRight, Loader2, GraduationCap, CheckCircle2 } from "lucide-react";
 import type { Staff, StaffAssignment, StaffBatchAssignment } from "@/types";
 
+const STAFF_DASHBOARD_TIMEOUT_MS = 15_000;
+
 export const Route = createFileRoute("/dashboard/staff/")({
   head: () => ({ meta: [{ title: "Staff Dashboard — EduOS" }] }),
   component: StaffDashboard,
 });
 
-function StatCard({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: string }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-4 shadow-sm">
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${color}`}>
@@ -38,38 +50,119 @@ function StaffDashboard() {
   const [todaySlots, setTodaySlots] = useState<Schedule[]>([]);
   const [studentCount, setStudentCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const assignedCourses = staffRecord?.assigned_courses ?? [];
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadDashboardData() {
-      if (!user?.id) return;
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
-      
-      const staffRes = await getStaffByUserId(user.id);
-      if (staffRes.success && staffRes.data) {
+
+      try {
+        setLoadError(null);
+        const staffRes = await Promise.race([
+          getStaffByUserId(user.id),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Staff dashboard load timed out.")), STAFF_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        if (!staffRes.success || !staffRes.data) {
+          setStaffRecord(null);
+          setAssignments([]);
+          setBatchAssignments([]);
+          setTodaySlots([]);
+          setStudentCount(0);
+          setLoadError(staffRes.error ?? "Unable to load staff profile.");
+          return;
+        }
+
         setStaffRecord(staffRes.data);
-        const assignRes = await getStaffAssignments(staffRes.data.id);
+
+        const [assignRes, batchAssignRes, schedRes, countRes] = await Promise.all([
+          Promise.race([
+            getStaffAssignments(staffRes.data.id),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Staff assignments load timed out.")), STAFF_DASHBOARD_TIMEOUT_MS);
+            }),
+          ]),
+          Promise.race([
+            getStaffBatchAssignments(staffRes.data.id),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Batch assignments load timed out.")), STAFF_DASHBOARD_TIMEOUT_MS);
+            }),
+          ]),
+          Promise.race([
+            getSchedulesByTeacher(staffRes.data.id),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Schedule load timed out.")), STAFF_DASHBOARD_TIMEOUT_MS);
+            }),
+          ]),
+          Promise.race([
+            getTeacherStudentCount(staffRes.data.id),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Student count load timed out.")), STAFF_DASHBOARD_TIMEOUT_MS);
+            }),
+          ]),
+        ]);
+
         if (assignRes.success && assignRes.data) {
           setAssignments(assignRes.data.filter((a) => Boolean(a.course_name || a.subject_name)));
+        } else {
+          setAssignments([]);
         }
-        const batchAssignRes = await getStaffBatchAssignments(staffRes.data.id);
+
         if (batchAssignRes.success && batchAssignRes.data) {
           setBatchAssignments(batchAssignRes.data);
+        } else {
+          setBatchAssignments([]);
         }
-        const schedRes = await getSchedulesByTeacher(staffRes.data.id);
+
         if (schedRes.success && schedRes.data) {
           setTodaySlots(filterSchedulesForToday(schedRes.data));
+        } else {
+          setTodaySlots([]);
         }
-        const countRes = await getTeacherStudentCount(staffRes.data.id);
+
         if (countRes.success && countRes.data !== null) {
           setStudentCount(countRes.data);
+        } else {
+          setStudentCount(0);
+        }
+
+        const errors = [assignRes.error, batchAssignRes.error, schedRes.error, countRes.error].filter(Boolean);
+        if (errors.length > 0) {
+          setLoadError(errors[0] ?? "Failed to load dashboard data.");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setStaffRecord(null);
+        setAssignments([]);
+        setBatchAssignments([]);
+        setTodaySlots([]);
+        setStudentCount(0);
+        setLoadError(err instanceof Error ? err.message : "Failed to load staff dashboard.");
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       }
-      setIsLoading(false);
     }
-    loadDashboardData();
+
+    void loadDashboardData();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   if (isLoading) {
@@ -82,6 +175,12 @@ function StaffDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={["staff"]}>
+      {loadError ? (
+        <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {loadError}
+        </div>
+      ) : null}
+
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
@@ -123,7 +222,6 @@ function StaffDashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Assigned Batches List */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
           <div className="border-b border-border bg-muted/30 px-6 py-4 flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
@@ -146,7 +244,7 @@ function StaffDashboard() {
                         </p>
                       </div>
                       <Link
-                        to="/dashboard/admin/attendance" // Pointing to existing attendance for now
+                        to="/dashboard/admin/attendance"
                         className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary opacity-0 group-hover:opacity-100 transition-all hover:bg-primary hover:text-white"
                       >
                         <ArrowRight className="h-4 w-4" />
@@ -199,7 +297,6 @@ function StaffDashboard() {
           </div>
         </div>
 
-        {/* Quick Actions / Schedule */}
         <div className="space-y-6">
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4 flex items-center gap-2">

@@ -47,6 +47,7 @@ function DashboardOverview() {
   const [staffCount, setStaffCount] = useState<number | null>(null);
   const [recentStudents, setRecentStudents] = useState<Student[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     const instituteId = user?.institute_id;
@@ -59,22 +60,43 @@ function DashboardOverview() {
 
     async function loadStats() {
       setStatsLoading(true);
+      setStatsError(null);
       // OPTIMIZATION: Only fetch count if we don't need the full list for stats
-      const [studentsResult, staffResult] = await Promise.all([
-        getStudentsByInstitute(instituteId!),
-        getStaffByInstitute(instituteId!),
-      ]);
+      try {
+        const [studentsResult, staffResult] = await Promise.all([
+          getStudentsByInstitute(instituteId!),
+          getStaffByInstitute(instituteId!),
+        ]);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (studentsResult.success && studentsResult.data) {
-        setStudentCount(studentsResult.data.length);
-        setRecentStudents(studentsResult.data.slice(0, 5));
+        if (studentsResult.success && studentsResult.data) {
+          setStudentCount(studentsResult.data.length);
+          setRecentStudents(studentsResult.data.slice(0, 5));
+        } else {
+          setStudentCount(0);
+          setRecentStudents([]);
+          setStatsError(studentsResult.error ?? "Failed to load students.");
+        }
+
+        if (staffResult.success && staffResult.data) {
+          setStaffCount(staffResult.data.length);
+        } else {
+          setStaffCount(0);
+          setStatsError((current) => current ?? staffResult.error ?? "Failed to load staff.");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStudentCount(0);
+          setStaffCount(0);
+          setRecentStudents([]);
+          setStatsError(err instanceof Error ? err.message : "Failed to load dashboard stats.");
+        }
+      } finally {
+        if (!cancelled) {
+          setStatsLoading(false);
+        }
       }
-      if (staffResult.success && staffResult.data) {
-        setStaffCount(staffResult.data.length);
-      }
-      setStatsLoading(false);
     }
 
     loadStats();
@@ -103,6 +125,12 @@ function DashboardOverview() {
 
       {/* Live stat cards */}
       <StatCards studentCount={studentCount} staffCount={staffCount} isLoading={statsLoading} />
+
+      {!statsLoading && statsError ? (
+        <div className="mt-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {statsError}
+        </div>
+      ) : null}
 
       {/* Recent admissions + AI panel */}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">

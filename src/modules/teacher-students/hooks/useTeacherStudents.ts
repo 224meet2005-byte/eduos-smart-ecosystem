@@ -9,6 +9,7 @@ import { useMountedRef } from "@/hooks/useMountedRef";
 import type { TeacherStudentListItem, TeacherStudentsFilters } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 20;
+const TEACHER_STUDENTS_TIMEOUT_MS = 15_000;
 
 interface UseTeacherStudentsOptions {
   staffId: string | null;
@@ -50,26 +51,42 @@ export function useTeacherStudents({ staffId, initialPageSize = DEFAULT_PAGE_SIZ
       setIsLoading(true);
       setError(null);
 
-      const result = await getTeacherStudents(
-        staffId,
-        { ...filters, search: debouncedSearch },
-        targetPage,
-        pageSize,
-      );
+      try {
+        const result = await Promise.race([
+          getTeacherStudents(
+            staffId,
+            { ...filters, search: debouncedSearch },
+            targetPage,
+            pageSize,
+          ),
+          new Promise<never>((_, reject) => {
+            const timeoutId = setTimeout(() => {
+              clearTimeout(timeoutId);
+              reject(new Error("Loading students timed out."));
+            }, TEACHER_STUDENTS_TIMEOUT_MS);
+          }),
+        ]);
 
-      if (!mounted.current || controller.signal.aborted) return;
+        if (!mounted.current || controller.signal.aborted) return;
 
-      if (!result.success || !result.data) {
-        setError(result.error ?? "Failed to load students.");
+        if (!result.success || !result.data) {
+          setError(result.error ?? "Failed to load students.");
+          setStudents([]);
+          return;
+        }
+
+        setStudents(result.data.items);
+        setTotal(result.data.meta.total);
+        setTotalPages(result.data.meta.total_pages);
+      } catch (err) {
+        if (!mounted.current || controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Failed to load students.");
         setStudents([]);
-        setIsLoading(false);
-        return;
+      } finally {
+        if (mounted.current && !controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
-
-      setStudents(result.data.items);
-      setTotal(result.data.meta.total);
-      setTotalPages(result.data.meta.total_pages);
-      setIsLoading(false);
     },
     [staffId, filters, debouncedSearch, page, pageSize, mounted],
   );

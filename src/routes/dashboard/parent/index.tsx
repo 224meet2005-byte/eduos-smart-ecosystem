@@ -37,6 +37,8 @@ import {
   getScheduleExceptions,
 } from "@/services/schedule.service";
 
+const PARENT_DASHBOARD_TIMEOUT_MS = 15_000;
+
 export const Route = createFileRoute("/dashboard/parent/")({
   head: () => ({ meta: [{ title: "Parent Dashboard — EduOS" }] }),
   component: ParentDashboard,
@@ -80,46 +82,66 @@ function ParentDashboard() {
       setFeeError(null);
       setChildError(null);
 
-      const bootstrapResult = await getParentPortalBootstrap(user.id, user.institute_id);
-      if (cancelled) return;
+      try {
+        const bootstrapResult = await Promise.race([
+          getParentPortalBootstrap(user.id, user.institute_id),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Parent portal load timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
 
-      if (!bootstrapResult.success || !bootstrapResult.data) {
-        setError(bootstrapResult.error ?? "Unable to load parent profile.");
+        if (cancelled) return;
+
+        if (!bootstrapResult.success || !bootstrapResult.data) {
+          setError(bootstrapResult.error ?? "Unable to load parent profile.");
+          setParent(null);
+          setChildren([]);
+          setFeeSummary(null);
+          return;
+        }
+
+        setParent(bootstrapResult.data.parent);
+        setChildren(bootstrapResult.data.children);
+
+        if (bootstrapResult.data.children.length > 0) {
+          const preferredChildId =
+            selectedChildId && bootstrapResult.data.children.some((child) => child.id === selectedChildId)
+              ? selectedChildId
+              : bootstrapResult.data.children[0].id;
+          if (preferredChildId !== selectedChildId) {
+            setParentSelectedChildId(preferredChildId);
+          }
+        } else {
+          setParentSelectedChildId(null);
+        }
+
+        const feeResult = await Promise.race([
+          getParentFeeSummary(bootstrapResult.data.parent.id),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Fee summary load timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        if (feeResult.success && feeResult.data) {
+          setFeeSummary(feeResult.data);
+        } else {
+          setFeeError(feeResult.error ?? "Failed to load fee summary.");
+          setFeeSummary(null);
+        }
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(loadError instanceof Error ? loadError.message : "Unable to load parent profile.");
         setParent(null);
         setChildren([]);
         setFeeSummary(null);
-        setIsLoading(false);
-        setIsFeeLoading(false);
-        return;
-      }
-
-      setParent(bootstrapResult.data.parent);
-      setChildren(bootstrapResult.data.children);
-
-      if (bootstrapResult.data.children.length > 0) {
-        const preferredChildId =
-          selectedChildId && bootstrapResult.data.children.some((child) => child.id === selectedChildId)
-            ? selectedChildId
-            : bootstrapResult.data.children[0].id;
-        if (preferredChildId !== selectedChildId) {
-          setParentSelectedChildId(preferredChildId);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+          setIsFeeLoading(false);
         }
-      } else {
-        setParentSelectedChildId(null);
       }
-
-      const feeResult = await getParentFeeSummary(bootstrapResult.data.parent.id);
-      if (cancelled) return;
-
-      if (feeResult.success && feeResult.data) {
-        setFeeSummary(feeResult.data);
-      } else {
-        setFeeError(feeResult.error ?? "Failed to load fee summary.");
-        setFeeSummary(null);
-      }
-
-      setIsLoading(false);
-      setIsFeeLoading(false);
     }
 
     void loadParentPortal();
@@ -138,16 +160,29 @@ function ParentDashboard() {
       setIsChildLoading(true);
       setChildError(null);
 
-      const snapshotResult = await getParentChildSnapshot(currentChildId);
-      if (cancelled) return;
+      try {
+        const snapshotResult = await Promise.race([
+          getParentChildSnapshot(currentChildId),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Child analytics load timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
 
-      if (snapshotResult.success && snapshotResult.data) {
-        setParentChildSnapshot(currentChildId, snapshotResult.data);
-      } else {
-        setChildError(snapshotResult.error ?? "Failed to load child analytics.");
+        if (cancelled) return;
+
+        if (snapshotResult.success && snapshotResult.data) {
+          setParentChildSnapshot(currentChildId, snapshotResult.data);
+        } else {
+          setChildError(snapshotResult.error ?? "Failed to load child analytics.");
+        }
+      } catch (loadError) {
+        if (cancelled) return;
+        setChildError(loadError instanceof Error ? loadError.message : "Failed to load child analytics.");
+      } finally {
+        if (!cancelled) {
+          setIsChildLoading(false);
+        }
       }
-
-      setIsChildLoading(false);
     }
 
     void loadSelectedChild();
@@ -164,32 +199,54 @@ function ParentDashboard() {
     setChildError(null);
     setFeeError(null);
 
-    const bootstrapResult = await getParentPortalBootstrap(user.id, user.institute_id);
-    if (bootstrapResult.success && bootstrapResult.data) {
-      setParent(bootstrapResult.data.parent);
-      setChildren(bootstrapResult.data.children);
+    try {
+      const bootstrapResult = await Promise.race([
+        getParentPortalBootstrap(user.id, user.institute_id),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Parent portal refresh timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+        }),
+      ]);
 
-      const feeResult = await getParentFeeSummary(bootstrapResult.data.parent.id);
-      if (feeResult.success && feeResult.data) {
-        setFeeSummary(feeResult.data);
-      } else {
-        setFeeError(feeResult.error ?? "Failed to load fee summary.");
-      }
+      if (bootstrapResult.success && bootstrapResult.data) {
+        setParent(bootstrapResult.data.parent);
+        setChildren(bootstrapResult.data.children);
 
-      if (currentChildId) {
-        const snapshotResult = await getParentChildSnapshot(currentChildId);
-        if (snapshotResult.success && snapshotResult.data) {
-          setParentChildSnapshot(currentChildId, snapshotResult.data);
+        const feeResult = await Promise.race([
+          getParentFeeSummary(bootstrapResult.data.parent.id),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Fee summary refresh timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+          }),
+        ]);
+
+        if (feeResult.success && feeResult.data) {
+          setFeeSummary(feeResult.data);
         } else {
-          setChildError(snapshotResult.error ?? "Failed to refresh selected child.");
+          setFeeError(feeResult.error ?? "Failed to load fee summary.");
         }
-      }
-    } else {
-      setError(bootstrapResult.error ?? "Unable to refresh parent portal.");
-    }
 
-    setIsLoading(false);
-    setIsFeeLoading(false);
+        if (currentChildId) {
+          const snapshotResult = await Promise.race([
+            getParentChildSnapshot(currentChildId),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Child analytics refresh timed out.")), PARENT_DASHBOARD_TIMEOUT_MS);
+            }),
+          ]);
+
+          if (snapshotResult.success && snapshotResult.data) {
+            setParentChildSnapshot(currentChildId, snapshotResult.data);
+          } else {
+            setChildError(snapshotResult.error ?? "Failed to refresh selected child.");
+          }
+        }
+      } else {
+        setError(bootstrapResult.error ?? "Unable to refresh parent portal.");
+      }
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh parent portal.");
+    } finally {
+      setIsLoading(false);
+      setIsFeeLoading(false);
+    }
   }
 
   function downloadReport(format: "json" | "csv") {
