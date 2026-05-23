@@ -280,7 +280,7 @@ export async function getStudentByUserId(userId: string): Promise<ApiResponse<St
         assignments:student_batch_assignments(
           id, batch_id, course_id, is_active, 
           batch:batches(id, name),
-          course:courses(id, name)
+          course:lms_courses(id, title as name)
         )
       `)
       .eq("user_id", userId)

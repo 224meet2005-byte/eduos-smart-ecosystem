@@ -1,1 +1,1 @@
-import{u as r}from"./server-C5FtxiKt.mjs";import{a as s}from"./utils-DInYzew2.mjs";function m({className:m,...a}){return r.jsx("div",{className:s("animate-pulse rounded-md bg-primary/10",m),...a})}export{m as a};
+import{u as r}from"./server-CyJ9bBBI.mjs";import{a as s}from"./utils-DInYzew2.mjs";function m({className:m,...a}){return r.jsx("div",{className:s("animate-pulse rounded-md bg-primary/10",m),...a})}export{m as a};

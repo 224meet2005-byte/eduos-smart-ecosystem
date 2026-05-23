@@ -19,10 +19,10 @@ export async function getCoursesByInstitute(
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
   let query = supabase
-    .from("courses")
+    .from("lms_courses")
     .select("*")
     .eq("institute_id", instituteId)
-    .order("name", { ascending: true });
+    .order("title", { ascending: true });
 
   if (activeOnly) {
     query = query.eq("is_active", true);
@@ -31,5 +31,12 @@ export async function getCoursesByInstitute(
   const { data, error } = await query;
 
   if (error) return { data: null, error: error.message, success: false };
-  return { data: data as Course[], error: null, success: true };
+
+  const rows = (data ?? []) as any[];
+  const mapped: Course[] = rows.map((r) => ({
+    ...r,
+    name: r.title,
+  }));
+
+  return { data: mapped, error: null, success: true };
 }

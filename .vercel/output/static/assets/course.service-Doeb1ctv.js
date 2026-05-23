@@ -1,1 +1,0 @@
-import{e}from"./index-BlO4MvBO.js";const s={data:null,error:"Supabase is not configured.",success:!1};async function r(r,a=!0){if(!e)return s;let t=e.from("courses").select("*").eq("institute_id",r).order("name",{ascending:!0});a&&(t=t.eq("is_active",!0));const{data:n,error:c}=await t;return c?{data:null,error:c.message,success:!1}:{data:n,error:null,success:!0}}export{r as g};

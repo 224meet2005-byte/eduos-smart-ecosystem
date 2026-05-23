@@ -1,1 +1,1 @@
-import{B as t}from"./server-C5FtxiKt.mjs";function e(e,r=300){const[o,s]=t.useState(e);return t.useEffect(()=>{const t=setTimeout(()=>s(e),r);return()=>clearTimeout(t)},[e,r]),o}export{e};
+import{B as e}from"./server-CyJ9bBBI.mjs";function t(t,r=300){const[o,s]=e.useState(t);return e.useEffect(()=>{const e=setTimeout(()=>s(t),r);return()=>clearTimeout(e)},[t,r]),o}export{t as e};

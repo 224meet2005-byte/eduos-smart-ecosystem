@@ -224,17 +224,52 @@ export async function registerInstitute(
   // All three DB operations run inside a single transaction — if any fail,
   // all are rolled back. The RLS bypass is safe because the role is DB-assigned.
 
-  const { data: rpcData, error: rpcError } = await supabase.rpc("register_institute", {
-    p_institute_name: instituteName,
-    p_admin_name: adminName,
-    p_email: email,
-    p_phone: phone,
-    p_user_id: userId,
-  });
+  // Call the register_institute RPC with a short retry/backoff loop to
+  // tolerate possible auth propagation delays between admin.createUser()
+  // and visibility from the DB-function's perspective.
+  let rpcData: any = null;
+  let rpcError: any = null;
+  const maxRpcAttempts = 5;
+
+  for (let attempt = 1; attempt <= maxRpcAttempts; attempt += 1) {
+    const res = await supabase.rpc("register_institute", {
+      p_institute_name: instituteName,
+      p_admin_name: adminName,
+      p_email: email,
+      p_phone: phone,
+      p_user_id: userId,
+    });
+
+    rpcData = res.data;
+    rpcError = res.error;
+
+    if (!rpcError) break; // success
+
+    // If the DB reports invalid user, try re-resolving the auth user id
+    // (in case of eventual consistency) and retry after a small backoff.
+    const msg = String(rpcError?.message || "");
+    if (msg.includes("REGISTRATION_INVALID_USER") && attempt < maxRpcAttempts) {
+      // Try to find the auth user by email again; if found, use that id.
+      const found = await findAuthUserIdByEmail(email);
+      if (found) userId = found;
+
+      // backoff delay (ms)
+      await new Promise((r) => setTimeout(r, attempt * 300));
+      continue;
+    }
+
+    // For other errors or after exhausting retries, stop retrying.
+    break;
+  }
 
   if (rpcError) {
-    // Map known DB-level exception prefixes to user-friendly messages
-    const message = mapRpcError(rpcError.message);
+    // Log raw RPC error for debugging and return a mapped message.
+    // (Console logging helps during local development; in production
+    // the logging can be routed to your error capture system.)
+    // eslint-disable-next-line no-console
+    console.error("register_institute RPC error:", rpcError);
+
+    const message = mapRpcError(String(rpcError.message || rpcError));
     return {
       data: null,
       error: message,

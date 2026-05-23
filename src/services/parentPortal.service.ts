@@ -60,7 +60,7 @@ async function getStudentCourses(studentId: string): Promise<ApiResponse<Student
 
   const { data, error } = await supabase
     .from("student_courses")
-    .select("id, student_id, course_id, institute_id, enrolled_at, status, course:courses(id, institute_id, name, code, is_active, created_at, updated_at)")
+    .select("id, student_id, course_id, institute_id, enrolled_at, status, course:lms_courses(id, institute_id, title as name, code, is_active, created_at, updated_at)")
     .eq("student_id", studentId)
     .order("enrolled_at", { ascending: false });
 
