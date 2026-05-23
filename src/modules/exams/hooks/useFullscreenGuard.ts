@@ -9,17 +9,16 @@ import { isFullscreenActive, requestFullscreen, exitFullscreen } from '../utils/
 
 interface UseFullscreenGuardProps {
   enabled: boolean;
-  onViolation?: (count: number, isAutoSubmit: boolean) => void;
-  maxViolations?: number;
+  onViolation?: (violationType: string) => void;
+  shouldIgnoreViolation?: () => boolean;
 }
 
 export function useFullscreenGuard({
   enabled,
   onViolation,
-  maxViolations = 3,
+  shouldIgnoreViolation,
 }: UseFullscreenGuardProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [violationCount, setViolationCount] = useState(0);
   const requestTimeoutRef = useRef<NodeJS.Timeout>();
   const isEnabledRef = useRef(enabled);
 
@@ -34,19 +33,10 @@ export function useFullscreenGuard({
     setIsFullscreen(active);
 
     // Only record violation if it was enabled and is now exiting
-    if (!active && isEnabledRef.current) {
-      setViolationCount((prev) => {
-        const newCount = prev + 1;
-        
-        if (onViolation) {
-          const shouldAutoSubmit = newCount >= maxViolations;
-          onViolation(newCount, shouldAutoSubmit);
-        }
-
-        return newCount;
-      });
+    if (!active && isEnabledRef.current && !shouldIgnoreViolation?.()) {
+      onViolation?.('fullscreen_exit');
     }
-  }, [onViolation, maxViolations]);
+  }, [onViolation, shouldIgnoreViolation]);
 
   // Handle fullscreen error
   const handleFullscreenError = useCallback((e: Event) => {
@@ -103,7 +93,6 @@ export function useFullscreenGuard({
 
   return {
     isFullscreen,
-    violationCount,
     requestFullscreen: handleRequestFullscreen,
     exitFullscreen: handleExitFullscreen,
   };

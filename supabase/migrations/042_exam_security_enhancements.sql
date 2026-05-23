@@ -44,12 +44,24 @@ CREATE TABLE IF NOT EXISTS public.exam_sessions (
     user_agent TEXT,
     
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    status TEXT NOT NULL DEFAULT 'active',
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ended_at TIMESTAMPTZ,
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Compatibility shims when exam_sessions already existed from an earlier deploy.
+ALTER TABLE public.exam_sessions
+ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE public.exam_sessions
+ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE public.exam_sessions
+ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 
 -- ── 4. Enhanced Violation Tracking Table ────────────────────────────────────
 ALTER TABLE public.exam_violations
@@ -67,6 +79,9 @@ CREATE TABLE IF NOT EXISTS public.test_violations (
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.test_violations
+ADD COLUMN IF NOT EXISTS violation_count INTEGER DEFAULT 1;
 
 -- ── 6. Indexes for Performance ───────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_exam_sessions_attempt ON public.exam_sessions(attempt_id);
@@ -129,8 +144,8 @@ BEGIN
     
     -- End all active sessions for this attempt
     UPDATE public.exam_sessions
-    SET is_active = FALSE, ended_at = NOW()
-    WHERE attempt_id = attempt_id AND is_active = TRUE;
+    SET is_active = FALSE, status = 'ended', ended_at = NOW()
+    WHERE attempt_id = lock_exam_attempt.attempt_id AND is_active = TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

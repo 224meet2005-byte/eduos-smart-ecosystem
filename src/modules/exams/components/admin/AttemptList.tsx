@@ -69,6 +69,27 @@ export function AttemptList({ examId }: AttemptListProps) {
       ),
     },
     {
+      key: "last_violation_at",
+      header: "Last Violation",
+      render: (attempt) => {
+        const date = attempt.last_violation_at;
+        return (
+          <span className="text-muted-foreground">
+            {date ? format(new Date(date), "MMM d, h:mm a") : "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "auto_submit_reason",
+      header: "Auto Submit Reason",
+      render: (attempt) => (
+        <span className="text-muted-foreground max-w-[220px] truncate block">
+          {attempt.auto_submit_reason || "—"}
+        </span>
+      ),
+    },
+    {
       key: "date",
       header: "Date",
       render: (attempt) => {

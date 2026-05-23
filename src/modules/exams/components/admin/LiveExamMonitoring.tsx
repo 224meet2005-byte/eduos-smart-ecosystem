@@ -16,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getExamAttemptViolations } from '../../services/exam.service';
 
 interface LiveExamMonitoringProps {
   examId: string;
@@ -28,6 +29,8 @@ interface ActiveStudent {
   status: string;
   last_active_at: string;
   violation_count: number;
+  last_violation_at: string | null;
+  auto_submit_reason: string | null;
   is_locked: boolean;
 }
 
@@ -49,32 +52,20 @@ export function LiveExamMonitoring({ examId }: LiveExamMonitoringProps) {
   });
 
   const fetchInitialData = useCallback(async () => {
-    // Fetch active attempts
-    const { data: attempts } = await supabase
-      .from('exam_attempts')
-      .select(`
-        id,
-        status,
-        last_active_at,
-        violation_count,
-        is_locked,
-        student:students(
-          admission_no,
-          user:users(name)
-        )
-      `)
-      .eq('exam_id', examId)
-      .order('last_active_at', { ascending: false });
+    // Fetch active attempts via the shared summary API
+    const { data: attempts } = await getExamAttemptViolations(examId);
 
     if (attempts) {
       const formatted = attempts.map((a: any) => ({
-        attempt_id: a.id,
-        student_name: a.student?.user?.name || 'Unknown',
-        admission_no: a.student?.admission_no || '',
+        attempt_id: a.attempt_id,
+        student_name: a.student_name || 'Unknown',
+        admission_no: a.admission_no || '',
         status: a.status,
-        last_active_at: a.last_active_at,
-        violation_count: a.violation_count || 0,
-        is_locked: a.is_locked,
+        last_active_at: a.last_violation_at || a.submitted_at || new Date().toISOString(),
+        violation_count: a.violations || 0,
+        last_violation_at: a.last_violation_at,
+        auto_submit_reason: a.auto_submit_reason,
+        is_locked: ['submitted', 'auto_submitted', 'graded'].includes(a.status),
       }));
       setActiveStudents(formatted);
       
@@ -283,9 +274,16 @@ export function LiveExamMonitoring({ examId }: LiveExamMonitoringProps) {
                             )}>
                               {student.violation_count} Violations
                             </span>
+                            {student.auto_submit_reason && (
+                              <span className="text-[10px] text-muted-foreground max-w-[180px] truncate">
+                                {student.auto_submit_reason}
+                              </span>
+                            )}
                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                               <Clock className="h-2 w-2" />
-                              {format(new Date(student.last_active_at), 'HH:mm:ss')}
+                              {student.last_violation_at
+                                ? format(new Date(student.last_violation_at), 'HH:mm:ss')
+                                : format(new Date(student.last_active_at), 'HH:mm:ss')}
                             </span>
                           </div>
                         </div>

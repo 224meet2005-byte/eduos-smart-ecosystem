@@ -24,8 +24,6 @@ import {
   disableKeyboardShortcuts,
   preventPageNavigation,
   cleanupPageNavigationPrevention,
-  generateBrowserFingerprint,
-  getOrCreateDeviceId,
 } from '../utils/exam-security';
 import { useFullscreenGuard } from '../hooks/useFullscreenGuard';
 import { useTabSwitchDetection } from '../hooks/useTabSwitchDetection';
@@ -34,98 +32,125 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface SecureExamWrapperProps {
-  examId: string;
   attemptId: string;
+  initialViolationCount?: number;
+  submissionLockRef?: React.MutableRefObject<boolean>;
   children: React.ReactNode;
   enabled?: boolean;
   onAutoSubmit?: () => void;
 }
 
 export function SecureExamWrapper({
-  examId,
   attemptId,
+  initialViolationCount = 0,
+  submissionLockRef,
   children,
   enabled = true,
   onAutoSubmit,
 }: SecureExamWrapperProps) {
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationMessage, setViolationMessage] = useState('');
-  const [localViolationCount, setLocalViolationCount] = useState(0);
+  const [violationCount, setViolationCount] = useState(initialViolationCount);
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
   const isAutoSubmittingRef = useRef(false);
+  const violationInFlightRef = useRef(false);
+  const lastViolationAtRef = useRef(0);
 
-  const handleAutoSubmit = useCallback(async () => {
-    if (isAutoSubmittingRef.current || isSubmitting) return;
+  useEffect(() => {
+    setViolationCount(initialViolationCount);
+  }, [initialViolationCount]);
+
+  const handleAutoSubmit = useCallback(async (autoSubmitReason: string) => {
+    if (isAutoSubmittingRef.current) return;
     isAutoSubmittingRef.current = true;
-    setIsSubmitting(true);
+    setIsAutoSubmitting(true);
+    if (submissionLockRef) submissionLockRef.current = true;
     
     try {
-      const result = await submitExamAttempt(attemptId);
+      const result = await submitExamAttempt(attemptId, { autoSubmitReason });
       if (result.success) {
         toast.error('Exam auto-submitted due to security violations');
         if (onAutoSubmit) onAutoSubmit();
+      } else {
+        toast.error(result.error || 'Auto-submit failed');
+        if (submissionLockRef) submissionLockRef.current = false;
       }
     } catch (error) {
       console.error('Auto-submit failed:', error);
+      if (submissionLockRef) submissionLockRef.current = false;
     } finally {
-      setIsSubmitting(false);
+      setIsAutoSubmitting(false);
     }
-  }, [attemptId, onAutoSubmit, isSubmitting]);
+  }, [attemptId, onAutoSubmit, submissionLockRef]);
+
+  const shouldIgnoreViolation = useCallback(() => {
+    return Boolean(
+      submissionLockRef?.current ||
+      isAutoSubmittingRef.current ||
+      shouldAutoSubmit
+    );
+  }, [submissionLockRef, shouldAutoSubmit]);
+
+  const handleViolation = useCallback(async (violationType: string) => {
+    if (!enabled || shouldIgnoreViolation() || violationInFlightRef.current) return;
+
+    const now = Date.now();
+    if (now - lastViolationAtRef.current < 900) return;
+    lastViolationAtRef.current = now;
+    violationInFlightRef.current = true;
+
+    try {
+      const result = await recordViolationWithCheck(attemptId, violationType, {
+        source: 'proctoring',
+        recordedAt: new Date().toISOString(),
+      });
+
+      if (!result.success || !result.data) {
+        toast.error(result.error || 'Failed to record violation');
+        return;
+      }
+
+      setViolationCount(result.data.totalViolations);
+
+      if (result.data.totalViolations >= 3 || result.data.shouldAutoSubmit) {
+        setShouldAutoSubmit(true);
+        setViolationMessage('Maximum violations reached. Your exam is being auto-submitted.');
+        setShowViolationModal(true);
+        await handleAutoSubmit(result.data.reason);
+        return;
+      }
+
+      if (result.data.totalViolations === 1) {
+        setViolationMessage(
+          violationType === 'fullscreen_exit'
+            ? 'Fullscreen mode is required. Please re-enter fullscreen to continue.'
+            : violationType === 'tab_switch'
+              ? 'Tab switch detected. Please stay on this page.'
+              : 'Window focus loss detected. Please stay on this page.'
+        );
+        setShowViolationModal(true);
+      } else {
+        setViolationMessage(`Violation ${result.data.totalViolations}/3 recorded (${violationType}). One more will result in auto-submission.`);
+        setShowViolationModal(true);
+      }
+    } finally {
+      violationInFlightRef.current = false;
+    }
+  }, [attemptId, enabled, handleAutoSubmit, shouldIgnoreViolation]);
 
   // Fullscreen guard
   const fullscreenGuard = useFullscreenGuard({
     enabled: enabled && !shouldAutoSubmit,
-    onViolation: async (count, isAutoSubmit) => {
-      // 1st violation: Warning popup only
-      // 2nd violation: Warning + database log
-      // 3rd violation: Auto-submit test
-      
-      const newCount = localViolationCount + 1;
-      setLocalViolationCount(newCount);
-
-      if (newCount === 1) {
-        setViolationMessage('Fullscreen mode is required. Please re-enter fullscreen to continue.');
-        setShowViolationModal(true);
-      } else if (newCount === 2) {
-        setViolationMessage('Second fullscreen violation. This has been logged. One more will result in auto-submission.');
-        setShowViolationModal(true);
-        await recordViolationWithCheck(attemptId, 'fullscreen_exit', { count: newCount });
-      } else if (newCount >= 3) {
-        setShouldAutoSubmit(true);
-        setViolationMessage('Maximum violations reached. Your exam is being auto-submitted.');
-        setShowViolationModal(true);
-        await recordViolationWithCheck(attemptId, 'fullscreen_exit', { count: newCount });
-        handleAutoSubmit();
-      }
-    },
-    maxViolations: 3,
+    onViolation: handleViolation,
+    shouldIgnoreViolation,
   });
 
   // Tab switch detection
-  const tabDetection = useTabSwitchDetection({
+  useTabSwitchDetection({
     enabled: enabled && !shouldAutoSubmit,
-    onViolation: async (violationType) => {
-      const newCount = localViolationCount + 1;
-      setLocalViolationCount(newCount);
-
-      if (newCount === 1) {
-        setViolationMessage(`${violationType === 'tab_switch' ? 'Tab switch' : 'Window focus loss'} detected. Please stay on this page.`);
-        setShowViolationModal(true);
-      } else if (newCount === 2) {
-        setViolationMessage(`Second violation detected (${violationType}). This has been logged.`);
-        setShowViolationModal(true);
-        await recordViolationWithCheck(attemptId, violationType);
-      } else if (newCount >= 3) {
-        setShouldAutoSubmit(true);
-        setViolationMessage('Maximum violations reached. Your exam is being auto-submitted.');
-        setShowViolationModal(true);
-        const result = await recordViolationWithCheck(attemptId, violationType);
-        if (result.data?.shouldAutoSubmit || newCount >= 3) {
-          handleAutoSubmit();
-        }
-      }
-    },
+    onViolation: handleViolation,
+    shouldIgnoreViolation,
   });
 
   // Setup security measures on mount
@@ -143,7 +168,7 @@ export function SecureExamWrapper({
   }, [enabled]);
 
   // Initial fullscreen requirement overlay
-  if (enabled && !fullscreenGuard.isFullscreen && localViolationCount === 0 && !shouldAutoSubmit) {
+  if (enabled && !fullscreenGuard.isFullscreen && violationCount === 0 && !shouldAutoSubmit) {
     return (
       <div className="fixed inset-0 z-[9999] bg-background/95 backdrop-blur-sm flex items-center justify-center p-6 text-center">
         <div className="max-w-md space-y-6">
@@ -188,8 +213,8 @@ export function SecureExamWrapper({
             <p className="font-medium text-foreground">{violationMessage}</p>
             
             <div className="text-sm text-muted-foreground">
-              Violations recorded: <span className={cn("font-bold", localViolationCount >= 2 ? "text-destructive" : "text-foreground")}>
-                {localViolationCount}/3
+              Violations recorded: <span className={cn("font-bold", violationCount >= 2 ? "text-destructive" : "text-foreground")}>
+                  {violationCount}/3
               </span>
             </div>
 

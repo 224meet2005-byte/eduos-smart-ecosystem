@@ -30,7 +30,7 @@ export function StudentExamDashboard() {
   }, [user?.id]);
 
   const getExamStatus = (exam: Exam, attempt?: ExamAttempt | null) => {
-    if (attempt?.status === "submitted" || attempt?.status === "graded") return "completed";
+    if (attempt?.status === "submitted" || attempt?.status === "graded" || attempt?.status === "auto_submitted" || attempt?.status === "expired") return "completed";
     if (attempt?.status === "in_progress") return "active";
     
     const now = new Date();

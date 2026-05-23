@@ -268,7 +268,7 @@ export async function listStudentExams(
     .select(`
       *,
       exam_assignments!inner(student_id),
-      attempts:exam_attempts(id, status, score, percentage, passed, submitted_at)
+      attempts:exam_attempts(id, status, score, percentage, passed, submitted_at, violation_count, last_violation_at, auto_submit_reason)
     `)
     .eq("exam_assignments.student_id", student.id)
     .eq("status", "published")
@@ -391,7 +391,8 @@ export async function recordViolation(
  * Submit the exam attempt and calculate score
  */
 export async function submitExamAttempt(
-  attemptId: string
+  attemptId: string,
+  options?: { autoSubmitReason?: string | null }
 ): Promise<ApiResponse<ExamAttempt>> {
   if (!supabase) return SUPABASE_NOT_CONFIGURED;
 
@@ -449,6 +450,7 @@ export async function submitExamAttempt(
     .update({
       status: "submitted",
       submitted_at: new Date().toISOString(),
+      auto_submit_reason: options?.autoSubmitReason ?? null,
       score,
       total_questions: questions.length,
       correct_answers: correctCount,
@@ -546,6 +548,8 @@ export async function listAttempts(
       score: attempt?.score ?? 0,
       percentage: attempt?.percentage ?? 0,
       violation_count: attempt?.violation_count ?? 0,
+      last_violation_at: attempt?.last_violation_at ?? null,
+      auto_submit_reason: attempt?.auto_submit_reason ?? null,
       started_at: attempt?.started_at ?? null,
       submitted_at: attempt?.submitted_at ?? null,
       exam: { total_marks: totalMarks }
@@ -553,7 +557,14 @@ export async function listAttempts(
   });
 
   // 5. Sort: Submitted first, then In Progress, then Not Started
-  const statusOrder: Record<string, number> = { submitted: 0, graded: 0, in_progress: 1, not_started: 2 };
+  const statusOrder: Record<string, number> = {
+    submitted: 0,
+    auto_submitted: 0,
+    graded: 0,
+    expired: 0,
+    in_progress: 1,
+    not_started: 2,
+  };
   formattedData.sort((a, b) => {
     const orderA = statusOrder[a.status] ?? 99;
     const orderB = statusOrder[b.status] ?? 99;
@@ -728,6 +739,9 @@ export async function createExamSession(
       ip_address: sessionData.ipAddress,
       user_agent: sessionData.userAgent,
       is_active: true,
+      status: "active",
+      last_activity: new Date().toISOString(),
+      last_activity_at: new Date().toISOString(),
     })
     .select("id")
     .single();
@@ -839,6 +853,20 @@ export async function lockExamAttempt(attemptId: string): Promise<ApiResponse<vo
 
   if (error) return { data: null, error: getErrorMessage(error), success: false };
   return { data: undefined, error: null, success: true };
+}
+
+/**
+ * Get summary of violations for all attempts in an exam.
+ */
+export async function getExamAttemptViolations(examId: string): Promise<ApiResponse<any[]>> {
+  if (!supabase) return SUPABASE_NOT_CONFIGURED;
+
+  const { data, error } = await supabase.rpc('get_exam_attempt_violations', {
+    p_exam_id: examId,
+  });
+
+  if (error) return { data: null, error: getErrorMessage(error), success: false };
+  return { data: data || [], error: null, success: true };
 }
 
 /**

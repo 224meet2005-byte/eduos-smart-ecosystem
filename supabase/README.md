@@ -18,6 +18,22 @@ DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
 1. Go to Supabase Dashboard → SQL Editor
 2. Run `migrations/001_initial_schema.sql`
 
+### MCQ exam errors (missing columns)
+
+If the exam player shows errors such as `exam_sessions.status` or `test_violations.violation_count` does not exist, open the SQL Editor and run the full script:
+
+`migrations/052_exam_security_schema_repair.sql`
+
+If you see `violation_type is of type violation_type but expression is of type text`, also run:
+
+`migrations/053_exam_violation_type_text.sql`
+
+(052 includes this fix on fresh runs; 053 is for databases that already ran 052.)
+
+If you see `test_violations_attempt_id_fkey` violated, run:
+
+`migrations/054_fix_test_violations_attempt_fk.sql`
+
 ## Row Level Security
 
 All tables have RLS enabled with the following isolation rules:

@@ -49,9 +49,10 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [securityEnabled, setSecurityEnabled] = useState(true);
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false);
+  const [securityEnabled, setSecurityEnabled] = useState(false);
   const sessionTokenRef = useRef<string>('');
+  const submissionLockRef = useRef(false);
 
   // ── Validation Hooks ────────────────────────────────────────────────────────
 
@@ -129,6 +130,9 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
             return;
           }
 
+          // Proctoring only after the attempt row exists in exam_attempts.
+          setSecurityEnabled(true);
+
           // 4. Create secure exam session
           const browserFingerprint = generateBrowserFingerprint();
           const deviceId = getOrCreateDeviceId();
@@ -204,18 +208,18 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
   };
 
   const handleSubmit = async (isAuto = false) => {
-    if (!attempt || isSubmitting) return;
-    
-    if (!isAuto) {
-      const confirmSubmit = window.confirm("Are you sure you want to submit your test?");
-      if (!confirmSubmit) return;
-    } else {
-      toast.info("Submitting your test automatically...");
-    }
+    if (!attempt || isSubmittingExam) return;
 
-    setIsSubmitting(true);
-
+    submissionLockRef.current = true;
+    setIsSubmittingExam(true);
     try {
+      if (!isAuto) {
+        const confirmSubmit = window.confirm("Are you sure you want to submit your test?");
+        if (!confirmSubmit) return;
+      } else {
+        toast.info("Submitting your test automatically...");
+      }
+
       // Lock attempt before submission
       await lockExamAttempt(attempt.id);
 
@@ -230,9 +234,10 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
       }
     } catch (error) {
       toast.error("An error occurred while submitting. Please try again.");
+    } finally {
+      submissionLockRef.current = false;
+      setIsSubmittingExam(false);
     }
-    
-    setIsSubmitting(false);
   };
 
   if (isLoading || !exam || !attempt || attemptValidation.isLoading) {
@@ -284,8 +289,9 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
 
   return (
     <SecureExamWrapper
-      examId={examId}
       attemptId={attempt.id}
+      initialViolationCount={attempt.violation_count ?? 0}
+      submissionLockRef={submissionLockRef}
       enabled={securityEnabled}
       onAutoSubmit={() => navigate({ to: "/dashboard/student/exams" })}
     >
@@ -305,8 +311,8 @@ export function ExamPlayer({ examId }: ExamPlayerProps) {
             {formatTime(timeLeft)}
           </div>
 
-          <Button variant="default" onClick={() => handleSubmit(false)} disabled={isSubmitting || attempt.is_locked}>
-            {isSubmitting ? "Submitting..." : "Submit Test"} <Send className="ml-2 h-4 w-4" />
+          <Button variant="default" onClick={() => handleSubmit(false)} disabled={isSubmittingExam || attempt.is_locked}>
+            {isSubmittingExam ? "Submitting..." : "Submit Test"} <Send className="ml-2 h-4 w-4" />
           </Button>
         </header>
 

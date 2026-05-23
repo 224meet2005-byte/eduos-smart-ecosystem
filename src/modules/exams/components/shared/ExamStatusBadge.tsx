@@ -41,6 +41,16 @@ const STATUS_CONFIG: Record<AnyStatus, StatusConfig> = {
     dot: "bg-indigo-500 dark:bg-indigo-400",
     label: "Graded",
   },
+  auto_submitted: {
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+    dot: "bg-amber-500 dark:bg-amber-400",
+    label: "Auto Submitted",
+  },
+  expired: {
+    badge: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400",
+    dot: "bg-orange-500 dark:bg-orange-400",
+    label: "Expired",
+  },
   not_started: {
     badge: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
     dot: "bg-gray-400 dark:bg-gray-500",

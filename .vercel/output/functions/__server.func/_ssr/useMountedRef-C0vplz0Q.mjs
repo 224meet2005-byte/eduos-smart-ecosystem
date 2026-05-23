@@ -1,1 +1,1 @@
-import{E as e}from"./server-Ce-H2ofE.mjs";function r(){const r=e.useRef(!0);return e.useEffect(()=>(r.current=!0,()=>{r.current=!1}),[]),r}export{r as e};
+import{E as r}from"./server-DrDvUFfn.mjs";function e(){const e=r.useRef(!0);return r.useEffect(()=>(e.current=!0,()=>{e.current=!1}),[]),e}export{e};

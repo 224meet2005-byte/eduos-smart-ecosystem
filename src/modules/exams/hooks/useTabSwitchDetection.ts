@@ -10,12 +10,14 @@ interface UseTabSwitchDetectionProps {
   enabled: boolean;
   onViolation?: (violationType: string) => void;
   onVisibilityChange?: (isHidden: boolean) => void;
+  shouldIgnoreViolation?: () => boolean;
 }
 
 export function useTabSwitchDetection({
   enabled,
   onViolation,
   onVisibilityChange,
+  shouldIgnoreViolation,
 }: UseTabSwitchDetectionProps) {
   const lastViolationTimeRef = useRef<number>(0);
   const VIOLATION_DEBOUNCE_MS = 1000; // Increased debounce for stability
@@ -35,25 +37,25 @@ export function useTabSwitchDetection({
       onVisibilityChange(isHidden);
     }
 
-    if (isHidden) {
+    if (isHidden && !shouldIgnoreViolation?.()) {
       const now = Date.now();
       if (now - lastViolationTimeRef.current > VIOLATION_DEBOUNCE_MS) {
         lastViolationTimeRef.current = now;
         console.debug('Exam Security: Tab switch detected');
-        if (onViolation) {
-          onViolation('tab_switch');
-        }
+        onViolation?.('tab_switch');
       }
     }
-  }, [onViolation, onVisibilityChange]);
+  }, [onViolation, onVisibilityChange, shouldIgnoreViolation]);
 
   // Handle window blur (focus lost)
   const handleBlur = useCallback(() => {
-    if (!isEnabledRef.current) return;
+    if (!isEnabledRef.current || shouldIgnoreViolation?.()) return;
 
     // Wait a bit to see if it was just a temporary blur (e.g. browser chrome click)
     // or if the page actually becomes hidden
     setTimeout(() => {
+      if (shouldIgnoreViolation?.()) return;
+
       if (document.hidden) {
         // This is a real tab switch or minimize, handled by visibilitychange
         return;
@@ -69,12 +71,10 @@ export function useTabSwitchDetection({
       if (now - lastViolationTimeRef.current > VIOLATION_DEBOUNCE_MS) {
         lastViolationTimeRef.current = now;
         console.debug('Exam Security: Window blur detected');
-        if (onViolation) {
-          onViolation('window_blur');
-        }
+        onViolation?.('window_blur');
       }
     }, 200);
-  }, [onViolation]);
+  }, [onViolation, shouldIgnoreViolation]);
 
   // Handle window focus (focus gained)
   const handleFocus = useCallback(() => {
@@ -89,13 +89,13 @@ export function useTabSwitchDetection({
       // Alt+Tab (9 is Tab)
       if (e.altKey && e.keyCode === 9) {
         e.preventDefault();
-        if (onViolation) onViolation('alt_tab_attempt');
+        if (!shouldIgnoreViolation?.()) onViolation?.('alt_tab_attempt');
       }
 
       // Cmd+Tab (9 is Tab)
       if (e.metaKey && e.keyCode === 9) {
         e.preventDefault();
-        if (onViolation) onViolation('cmd_tab_attempt');
+        if (!shouldIgnoreViolation?.()) onViolation?.('cmd_tab_attempt');
       }
 
       // Win key (91, 92) or Cmd key (91, 93)
@@ -103,7 +103,7 @@ export function useTabSwitchDetection({
         // We don't necessarily want to prevent it (might be hard), but we can log it if it leads to blur
       }
     },
-    [onViolation]
+    [onViolation, shouldIgnoreViolation]
   );
 
   // Setup listeners
