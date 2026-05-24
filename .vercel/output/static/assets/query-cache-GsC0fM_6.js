@@ -1,1 +1,0 @@
-const t=new Map;function e(e){if(e)for(const n of t.keys())n.startsWith(e)&&t.delete(n);else t.clear()}async function n(e,n,s){const a=function(e){const n=t.get(e);return n?Date.now()>n.expiresAt?(t.delete(e),null):n.data:null}(e);if(null!==a)return a;const o=await s();return function(e,n,s=3e4){t.set(e,{data:n,expiresAt:Date.now()+s})}(e,o,n),o}export{n as c,e as i};
