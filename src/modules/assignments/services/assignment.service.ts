@@ -20,6 +20,31 @@ const SUPABASE_NOT_CONFIGURED = {
   success: false,
 } as const;
 
+function logAssignmentSupabaseError(
+  context: string,
+  error: unknown,
+  meta?: Record<string, unknown>
+) {
+  const err = error as Record<string, unknown> | null;
+  console.error(`[assignments] ${context}`, {
+    ...meta,
+    message: err?.message,
+    code: err?.code,
+    details: err?.details,
+    hint: err?.hint,
+    statusCode: err?.statusCode,
+    error,
+  });
+}
+
+function assignmentUploadErrorMessage(error: unknown): string {
+  const message = getErrorMessage(error);
+  if (/row-level security|violates row-level security policy/i.test(message)) {
+    return "Upload was blocked by permissions. Sign in with the correct account or ask your institute admin to apply the latest security policy update.";
+  }
+  return message;
+}
+
 // ── Shared Utilities ───────────────────────────────────────────────────────
 
 /**
@@ -39,8 +64,8 @@ export async function uploadAssignmentFile(
   const { data, error } = await supabase.storage.from(bucket).upload(fullPath, file);
 
   if (error) {
-    console.error(`Upload error to ${bucket}:`, error);
-    return { data: null, error: getErrorMessage(error), success: false };
+    logAssignmentSupabaseError("storage upload failed", error, { bucket, fullPath });
+    return { data: null, error: assignmentUploadErrorMessage(error), success: false };
   }
 
   const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(data.path);
@@ -163,8 +188,15 @@ export async function createAssignment(
       .insert(resourcePayload);
 
     if (resourceError) {
-      console.error("Failed to upload resources:", resourceError);
-      // We don't fail the whole creation if resources fail, but we log it
+      logAssignmentSupabaseError("assignment_resources insert failed", resourceError, {
+        assignmentId: assignment.id,
+        instituteId,
+      });
+      return {
+        data: null,
+        error: assignmentUploadErrorMessage(resourceError),
+        success: false,
+      };
     }
   }
 
@@ -451,7 +483,16 @@ export async function submitAssignment(
       .insert(filePayload);
 
     if (fileError) {
-      console.error("Failed to upload submission files:", fileError);
+      logAssignmentSupabaseError("submission_files insert failed", fileError, {
+        assignmentId,
+        submissionId: submission.id,
+        instituteId,
+      });
+      return {
+        data: null,
+        error: assignmentUploadErrorMessage(fileError),
+        success: false,
+      };
     }
   }
 
