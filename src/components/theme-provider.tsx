@@ -7,6 +7,7 @@ const ThemeCtx = createContext<Ctx | null>(null);
 const STORAGE_KEY = "eduos-theme";
 
 function applyTheme(t: "light" | "dark") {
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.classList.remove("light", "dark");
   root.classList.add(t);
@@ -25,6 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const compute = () => {
       const r = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
@@ -39,6 +41,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const setTheme = (t: Theme) => {
+    if (typeof localStorage === "undefined") {
+      setThemeState(t);
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, t);
     setThemeState(t);
   };

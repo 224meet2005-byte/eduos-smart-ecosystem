@@ -67,6 +67,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Runs once on mount. getCurrentUser() checks the stored JWT and fetches
     // the full user + institute record from the database.
     async function hydrateFromSession() {
+      if (typeof window === "undefined") {
+        logout();
+        return;
+      }
       setLoading(true);
       try {
         const result = await getCurrentUser();

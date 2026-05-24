@@ -1,1 +1,0 @@
-const a={super_admin:"Super Admin",admin:"Admin",staff:"Staff",student:"Student",parent:"Parent"},d={super_admin:"/dashboard/super-admin",admin:"/dashboard/admin",staff:"/dashboard/staff",student:"/dashboard/student",parent:"/dashboard/parent"};function n(a,d){return 0===d.length||d.includes(a)}function t(a){return d[a]??"/dashboard/student"}export{a,n,t};
