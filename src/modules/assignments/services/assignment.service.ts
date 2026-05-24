@@ -45,6 +45,36 @@ function assignmentUploadErrorMessage(error: unknown): string {
   return message;
 }
 
+const ASSIGNMENT_RESOURCE_SIGNED_URL_TTL = 3600;
+
+async function resolveStudentResourceDownloadUrls(
+  resources: AssignmentResource[] | null | undefined
+): Promise<AssignmentResource[]> {
+  if (!resources?.length || !supabase) return resources ?? [];
+
+  const resolved = await Promise.all(
+    resources.map(async (resource) => {
+      if (!resource.storage_path) return resource;
+
+      const { data, error } = await supabase.storage
+        .from("assignment-resources")
+        .createSignedUrl(resource.storage_path, ASSIGNMENT_RESOURCE_SIGNED_URL_TTL);
+
+      if (error || !data?.signedUrl) {
+        logAssignmentSupabaseError("resource signed URL failed", error, {
+          storage_path: resource.storage_path,
+          assignment_id: resource.assignment_id,
+        });
+        return resource;
+      }
+
+      return { ...resource, file_url: data.signedUrl };
+    })
+  );
+
+  return resolved;
+}
+
 // ── Shared Utilities ───────────────────────────────────────────────────────
 
 /**
@@ -406,6 +436,10 @@ export async function getStudentAssignmentDetail(
 
   if (assignmentError) return { data: null, error: getErrorMessage(assignmentError), success: false };
 
+  const resources = await resolveStudentResourceDownloadUrls(
+    (assignment as Assignment).resources
+  );
+
   const { data: submission } = await supabase
     .from("assignment_submissions")
     .select(`
@@ -419,6 +453,7 @@ export async function getStudentAssignmentDetail(
   return {
     data: {
       ...(assignment as Assignment),
+      resources,
       submission: (submission as AssignmentSubmission) || null,
     },
     error: null,
